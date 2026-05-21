@@ -16,7 +16,7 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
-from transformers import AutoModel, AutoProcessor
+from transformers import AutoProcessor, CLIPVisionModelWithProjection
 
 # ----------------------------------------------------------------------------
 # HSV histogram chi-square
@@ -84,7 +84,9 @@ class CLIPImageEncoder:
     ) -> None:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.processor = AutoProcessor.from_pretrained(model_id)
-        self.model = AutoModel.from_pretrained(model_id).to(self.device).eval()
+        # vision tower + projection head; .image_embeds is the joint-space CLIP embedding
+        self.model = CLIPVisionModelWithProjection.from_pretrained(model_id)
+        self.model = self.model.to(self.device).eval()
         for param in self.model.parameters():
             param.requires_grad_(False)
 
@@ -105,8 +107,8 @@ class CLIPImageEncoder:
         for batch_paths, pixel_values in loader:
             pixel_values = pixel_values.to(self.device, non_blocking=True)
             with torch.autocast(device_type="cuda" if on_gpu else "cpu", enabled=on_gpu):
-                feat = self.model.get_image_features(pixel_values=pixel_values)
-            feat = torch.nn.functional.normalize(feat.float(), dim=-1).cpu().numpy()
+                vis_out = self.model(pixel_values=pixel_values)
+            feat = torch.nn.functional.normalize(vis_out.image_embeds.float(), dim=-1).cpu().numpy()
             for path, vec in zip(batch_paths, feat):
                 out[path] = vec
         return out
