@@ -26,9 +26,12 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
-from PIL import Image
+import torch
+from PIL import Image, ImageFile
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # tolerate the occasional truncated keyframe
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.data.movienet import keyframe_key  # noqa: E402
@@ -62,9 +65,20 @@ class KeyframeDataset(Dataset):
 
     def __getitem__(self, i: int):
         key, path = self.items[i]
-        img = Image.open(path).convert("RGB")
-        pv = self.processor(images=img, return_tensors="pt")["pixel_values"][0]
+        try:
+            img = Image.open(path).convert("RGB")
+            pv = self.processor(images=img, return_tensors="pt")["pixel_values"][0]
+        except Exception:  # noqa: BLE001 - skip unreadable frames, embed the rest
+            return key, None
         return key, pv
+
+
+def _collate(batch: list[tuple[str, object]]):
+    """Drop keyframes that failed to load; stack the rest."""
+    good = [(k, pv) for k, pv in batch if pv is not None]
+    if not good:
+        return [], None
+    return [k for k, _ in good], torch.stack([pv for _, pv in good])
 
 
 def unique_keyframes(cut_index: str) -> dict[str, str]:
@@ -129,6 +143,7 @@ def main() -> None:
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=True,
+        collate_fn=_collate,
     )
 
     mode = "a" if h5_path.exists() else "w"
@@ -147,6 +162,8 @@ def main() -> None:
         buf_embs: list[np.ndarray] = []
         t0 = time.time()
         for bi, (keys, pixel_values) in enumerate(tqdm(loader, desc="embedding")):
+            if pixel_values is None:
+                continue
             emb = encoder.encode(pixel_values).numpy().astype(np.float16)
             buf_keys.extend(keys)
             buf_embs.append(emb)
