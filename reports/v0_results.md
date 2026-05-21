@@ -79,6 +79,51 @@ loss + projection head, and partial (LoRA) fine-tuning of DINOv2 so the backbone
 itself learns continuity-relevant features — the frozen-feature ceiling is the
 main limiter here.
 
+## Calibration analysis
+
+The within-shot τ95 threshold gives F1 0.226 versus 0.388 at the F1-optimal val
+threshold (logistic). This is not a failure mode — τ95 is a *different operating
+point*, and the gap is fully explained.
+
+τ95 means "more discontinuous than 95% of genuinely-continuous (within-shot)
+frame pairs." But consecutive keyframes of one shot are extremely similar, so the
+within-shot score distribution is far tighter than the cut-level distribution
+(`reports/figures/score_distributions.png`). The 95th percentile of that tight
+distribution lands *low* in the cut-level distribution:
+
+**logistic (v0)** — test precision/recall/F1 at each operating point:
+
+| operating point | threshold | cut-level percentile | precision | recall | F1 |
+|---|---|---|---|---|---|
+| τ95 | 0.251 | 51.4 | 0.128 | 0.923 | 0.225 |
+| τ99 | 0.715 | 85.9 | 0.288 | 0.565 | 0.382 |
+| val-optimal | 0.746 | 87.7 | 0.308 | 0.525 | 0.388 |
+
+**raw DINOv2 cosine:**
+
+| operating point | threshold | cut-level percentile | precision | recall | F1 |
+|---|---|---|---|---|---|
+| τ95 | 0.680 | 47.4 | 0.119 | 0.909 | 0.211 |
+| τ99 | 0.888 | 84.6 | 0.237 | 0.501 | 0.322 |
+| val-optimal | 0.897 | 86.1 | 0.246 | 0.466 | 0.322 |
+
+τ95 sits at only the ~51st percentile of cut-level scores — it flags roughly
+*half of all cuts*, giving recall 0.92 at precision 0.13. So τ95 is a
+**high-recall operating point**, not a conservative one; the low F1 is the
+precision cost of near-total recall.
+
+**Key result: τ99 ≈ the val-optimal threshold.** Calibrating at the 99th
+percentile of within-shot variation gives 0.715 (logistic) versus the
+label-derived F1-optimal 0.746 — F1 0.382 vs 0.388, essentially identical; raw
+cosine matches too (0.888 vs 0.897, F1 0.322 both). The within-shot calibration
+framework is therefore sound — the quantile is simply a precision/recall dial.
+
+**Recommended operating points.** For the actual use case — flagging cuts for
+human review — **τ95** is the right default: 92% recall catches almost every true
+inconsistency and a reviewer filters the false positives. For a balanced or
+reported number, use **τ99**, which reproduces the F1-optimal threshold *without
+ever using labels* — a label-free calibration of the headline operating point.
+
 ## Reproduce
 
 ```bash
