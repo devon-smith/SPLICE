@@ -1,15 +1,16 @@
 """Block 3c: AI-generated-video evaluation harness.
 
 Takes an AI-gen cut index (built by build_aigen_eval.py), runs the *exact* v0/v1
-scoring pipeline — frozen DINOv2 embedding, 2305-d boundary pair feature, the
-five scorers — and reports metrics overall and per source, against the MovieNet
-operating thresholds in configs/operating_thresholds.json.
+scoring pipeline — frozen DINOv2 embedding, 2305-d pair feature, the six scorers
+— and reports metrics overall and per source, against the MovieNet operating
+thresholds in configs/operating_thresholds.json.
 
   python scripts/eval/eval_aigen.py --aigen_index <cuts.parquet> --out <dir>/
 
 `--in_dist_check` runs the same pipeline on the MovieNet test split (using the
-cached MovieNet embeddings) and asserts it reproduces v0 AUPRC 0.356 and v1.5
-AUPRC 0.405 within 0.005 — a self-test of the harness.
+cached MovieNet embeddings) and asserts it reproduces v0 AUPRC 0.356, v0
+mean-pool-3 AUPRC 0.388 and v1.5 AUPRC 0.405 within 0.005 — a self-test of the
+harness.
 """
 
 import argparse
@@ -50,16 +51,20 @@ REPO = HERE.parents[2]
 MOVIENET_CUTS = "/mnt/disks/splice-data/outputs/cut_index/cuts.parquet"
 MOVIENET_EMB = "/mnt/disks/splice-data/embeddings/dinov2_base"
 DEFAULT_V0 = "/mnt/disks/splice-data/outputs/v0/v0_logistic.joblib"
+DEFAULT_MP = "/mnt/disks/splice-data/outputs/v0_mean_pool/v0_logistic.joblib"
 DEFAULT_V1 = "/mnt/disks/splice-data/outputs/v1_sound/v1_sound_seed2.pt"
 DEFAULT_V1_SCALER = "/mnt/disks/splice-data/outputs/v1_sound/scaler.joblib"
 BOUNDARY = ("left_img2_path", "right_img0_path")  # frames flanking the cut
+LEFT_KF = ("left_img0_path", "left_img1_path", "left_img2_path")
+RIGHT_KF = ("right_img0_path", "right_img1_path", "right_img2_path")
+ALL_KF = LEFT_KF + RIGHT_KF  # all six keyframes -- mean-pool-3 needs every one
 
 
 def embed_aigen_keyframes(cuts: pd.DataFrame, batch: int = 64) -> dict[str, np.ndarray]:
     """Encode every unique AI-gen keyframe with frozen DINOv2; returns {path: emb}."""
     from PIL import Image
 
-    paths = sorted(set(cuts[list(BOUNDARY)].to_numpy().ravel()))
+    paths = sorted(set(cuts[list(ALL_KF)].to_numpy().ravel()))
     encoder = DINOv2Encoder()
     out: dict[str, np.ndarray] = {}
     for i in range(0, len(paths), batch):
@@ -86,10 +91,23 @@ def boundary_features(cuts: pd.DataFrame, emb_of) -> np.ndarray:
     return build_pair_features_batch(e_left, e_right)
 
 
-def score_embedding_models(feats: np.ndarray, v0_path: str, v1_path: str) -> dict:
-    """raw DINOv2 cosine, v0 logistic, v1.5 MLP -- all from the cached feature."""
+def mean_pool_features(cuts: pd.DataFrame, emb_of) -> np.ndarray:
+    """2305-d mean-pool-3 pair feature: each side is the mean of its 3 keyframe embeddings.
+
+    Mirrors build_pair_features.py --mode mean_pool_3 exactly.
+    """
+    e_left = np.mean([[emb_of(p) for p in cuts[c]] for c in LEFT_KF], axis=0)
+    e_right = np.mean([[emb_of(p) for p in cuts[c]] for c in RIGHT_KF], axis=0)
+    return build_pair_features_batch(e_left, e_right)
+
+
+def score_embedding_models(
+    feats: np.ndarray, mp_feats: np.ndarray, v0_path: str, v1_path: str, mp_path: str
+) -> dict:
+    """raw DINOv2 cosine, v0 logistic, v0 mean-pool-3, v1.5 MLP -- from the cached features."""
     scores = {"raw_dino_cosine": 1.0 - feats[:, -1]}
     scores["logistic"] = joblib.load(v0_path).predict_proba(feats)[:, 1]
+    scores["mean_pool"] = joblib.load(mp_path).predict_proba(mp_feats)[:, 1]
     cfg = yaml.safe_load((REPO / "configs" / "v1_sound.yaml").read_text())
     model = MLPHead(in_dim=2305, dropout=cfg["head"]["dropout"])
     model.load_state_dict(torch.load(v1_path, map_location="cpu", weights_only=True))
@@ -136,6 +154,7 @@ def main() -> None:
     ap.add_argument("--aigen_index", default=None)
     ap.add_argument("--out", default="/mnt/disks/splice-data/outputs/aigen_eval/results/")
     ap.add_argument("--v0_model", default=DEFAULT_V0)
+    ap.add_argument("--mp_model", default=DEFAULT_MP)
     ap.add_argument("--v1_model", default=DEFAULT_V1)
     ap.add_argument("--in_dist_check", action="store_true")
     args = ap.parse_args()
@@ -154,13 +173,14 @@ def main() -> None:
     log.info("AI-gen cuts: %d, sources %s", len(cuts), sorted(cuts["source"].unique()))
     emb = embed_aigen_keyframes(cuts)
     feats = boundary_features(cuts, lambda p: emb[p])
+    mp_feats = mean_pool_features(cuts, lambda p: emb[p])
     scores = {
-        **score_embedding_models(feats, args.v0_model, args.v1_model),
+        **score_embedding_models(feats, mp_feats, args.v0_model, args.v1_model, args.mp_model),
         **score_image_baselines(cuts),
     }
     y = cuts["y_inconsistent"].to_numpy().astype(int)
 
-    order = ["raw_dino_cosine", "hsv_chisq", "clip_cosine", "logistic", "v1.5"]
+    order = ["raw_dino_cosine", "hsv_chisq", "clip_cosine", "logistic", "mean_pool", "v1.5"]
     overall = [metric_row(m, y, scores[m], thr) for m in order]
     per_source = {}
     for src, g in cuts.groupby("source"):
@@ -186,10 +206,11 @@ def run_in_dist_check(args, thr, out_dir) -> None:
     cuts = cuts[cuts["split"] == "test"].reset_index(drop=True)
     emb, key2row = load_embeddings(MOVIENET_EMB)
     feats = boundary_features(cuts, lambda p: emb[key2row[keyframe_key(p)]])
-    scores = score_embedding_models(feats, args.v0_model, args.v1_model)
+    mp_feats = mean_pool_features(cuts, lambda p: emb[key2row[keyframe_key(p)]])
+    scores = score_embedding_models(feats, mp_feats, args.v0_model, args.v1_model, args.mp_model)
     y = cuts["y_inconsistent"].to_numpy().astype(int)
 
-    expect = {"logistic": 0.3561, "v1.5": 0.4045}
+    expect = {"logistic": 0.3561, "mean_pool": 0.3882, "v1.5": 0.4045}
     ok = True
     lines = [
         "# AI-gen Harness In-Distribution Check\n",
@@ -224,6 +245,7 @@ def _write_md(out_dir, results, order) -> None:
         "hsv_chisq": "HSV χ²",
         "clip_cosine": "CLIP ViT-L cosine",
         "logistic": "v0 logistic",
+        "mean_pool": "v0 mean-pool-3",
         "v1.5": "v1.5 MLP",
     }
     md = [
@@ -252,9 +274,9 @@ def _write_md(out_dir, results, order) -> None:
     md.append("## MovieNet comparison\n")
     md.append("| Model | MovieNet AUPRC | AI-gen AUPRC | Δ |")
     md.append("|---|---|---|---|")
-    mn = {"logistic": 0.356, "v1.5": 0.403}
+    mn = {"logistic": 0.356, "mean_pool": 0.388, "v1.5": 0.403}
     by = {r["model"]: r for r in results["overall"]}
-    for m in ("logistic", "v1.5"):
+    for m in ("logistic", "mean_pool", "v1.5"):
         md.append(
             f"| {lab[m]} | {mn[m]:.3f} | {by[m]['auprc']:.3f} | " f"{by[m]['auprc'] - mn[m]:+.3f} |"
         )
@@ -273,6 +295,7 @@ def _plot(out_dir, per_source, order) -> None:
         "hsv_chisq": "HSV",
         "clip_cosine": "CLIP",
         "logistic": "v0",
+        "mean_pool": "v0 MP3",
         "v1.5": "v1.5",
     }
     sources = sorted(per_source)
@@ -289,7 +312,7 @@ def _plot(out_dir, per_source, order) -> None:
         title="AI-gen AUPRC by source and model",
     )
     ax.set_xticklabels(sources)
-    ax.legend(fontsize=8, ncol=5)
+    ax.legend(fontsize=8, ncol=6)
     fig.tight_layout()
     fig.savefig(out_dir / "aigen_auprc_by_source.png", dpi=120)
     plt.close(fig)

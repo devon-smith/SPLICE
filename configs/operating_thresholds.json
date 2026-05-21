@@ -1,6 +1,7 @@
 {
-  "_comment": "MovieNet-derived operating points, used as fixed thresholds for out-of-distribution (AI-gen) evaluation. val_thr = F1-optimal on MovieNet val; tau99 = 99th percentile of within-shot variation (the deployable threshold). Sourced from outputs/v0/results.json, outputs/calibration/calibration.json, and reports/v1_calibration.md.",
+  "_comment": "MovieNet-derived operating points, used as fixed thresholds for out-of-distribution (AI-gen) evaluation. val_thr = F1-optimal on MovieNet val; tau99 = 99th percentile of within-shot variation (the deployable threshold). Sourced from outputs/v0/results.json, outputs/v0_mean_pool/results.json, outputs/calibration/calibration.json, and reports/v1_calibration.md. mean_pool has no tau99 -- within-shot calibration was run only for the deployed scorers, so F1@tau99 is left blank for the mean-pool-3 ablation.",
   "logistic":        {"val_thr": 0.7458, "tau99": 0.7149},
+  "mean_pool":       {"val_thr": 0.8051},
   "raw_dino_cosine": {"val_thr": 0.8968, "tau99": 0.8881},
   "v1.5":            {"val_thr": 0.7543, "tau99": 0.6450},
   "hsv_chisq":       {"val_thr": 0.6429},
