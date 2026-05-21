@@ -1,0 +1,42 @@
+# SPLICE v0 -- frozen DINOv2 + logistic regression on 2305-d pair features.
+# All v0 hyperparameters live here; scripts accept CLI overrides.
+
+seed: 231
+
+paths:
+  data_root:   /mnt/disks/splice-data/datasets/movienet
+  cut_index:   /mnt/disks/splice-data/outputs/cut_index/cuts.parquet
+  embeddings:  /mnt/disks/splice-data/embeddings/dinov2_base
+  pairs:       /mnt/disks/splice-data/pairs/dino_v0_boundary
+  outputs:     /mnt/disks/splice-data/outputs/v0
+  calibration: /mnt/disks/splice-data/outputs/calibration
+
+encoder:
+  model_id: facebook/dinov2-base   # DINOv2 ViT-B/14
+  image_size: 224
+  embedding_dim: 768
+  batch_size: 128
+  num_workers: 8
+  autocast_dtype: float16
+
+pairs:
+  mode: boundary          # boundary | mean_pool_3
+  feature_dim: 2305       # 768*2 concat + 768 abs-diff + 1 cosine
+
+logistic:
+  C: 1.0
+  max_iter: 2000
+  class_weight: balanced  # task is ~6.5% positive
+  solver: lbfgs
+
+baselines:
+  hsv_bins: [8, 8, 8]                       # H, S, V histogram bins
+  clip_model_id: openai/clip-vit-large-patch14
+
+calibration:
+  quantile: 0.95
+  within_shot_pairs: [[0, 1], [1, 2], [0, 2]]   # img index pairs
+
+wandb:
+  project: splice-v0
+  mode: online            # online | offline | disabled
