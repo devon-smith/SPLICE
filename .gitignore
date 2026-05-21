@@ -19,3 +19,4 @@ outputs/
 .vscode/
 .idea/
 logs/
+reports/figures/error_grid/
