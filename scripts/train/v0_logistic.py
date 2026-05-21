@@ -74,11 +74,14 @@ def resolve_wandb_mode(requested: str) -> str:
 def log_wandb(project: str, name: str, mode: str, config: dict, metrics: dict, fig_path: Path):
     if mode == "disabled":
         return
-    import wandb
+    try:
+        import wandb
 
-    run = wandb.init(project=project, name=name, mode=mode, config=config, reinit=True)
-    run.log({**metrics, "curves": wandb.Image(str(fig_path))})
-    run.finish()
+        run = wandb.init(project=project, name=name, mode=mode, config=config, reinit=True)
+        run.log({**metrics, "curves": wandb.Image(str(fig_path))})
+        run.finish()
+    except Exception as exc:  # noqa: BLE001 - W&B logging must never lose computed results
+        log.warning("W&B logging failed for %s: %s", name, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +213,12 @@ def main() -> None:
     else:
         MODEL_ORDER[:] = ["logistic", "raw_dino_cosine"]
 
+    # persist raw scores first -- the CLIP pass is expensive, never lose it
+    np.savez(
+        out_dir / "scores.npz",
+        **{f"{n}__{k}": scores[n][k] for n in scores for k in scores[n]},
+    )
+
     # ---- evaluate, plot, log ------------------------------------------------
     rows = []
     for name in MODEL_ORDER:
@@ -242,10 +251,6 @@ def main() -> None:
             "n_test",
         ]
     ]
-    np.savez(
-        out_dir / "scores.npz",
-        **{f"{n}__{k}": scores[n][k] for n in scores for k in scores[n]},
-    )
     (out_dir / "results.json").write_text(json.dumps(rows, indent=2))
     table.to_csv(out_dir / "results.csv", index=False)
 
