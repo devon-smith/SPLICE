@@ -65,3 +65,12 @@ def test_cut_rows_for_movie_keyframe_paths():
 
 def test_cut_rows_single_shot_movie_has_no_cuts():
     assert cut_rows_for_movie("tt0", "train", [_shot(0, 0, 0)], FRAMES) == []
+
+
+def test_cut_rows_drops_ignore_labelled_cuts():
+    # boundary_label == -1 is BaSSL's "ignore" marker -> that cut is dropped
+    shots = [_shot(0, 0, 0), _shot(1, 0, -1), _shot(2, 1, 0), _shot(3, 1, 0)]
+    rows = cut_rows_for_movie("tt1", "train", shots, FRAMES)
+    # cuts: (0->1) kept, (1->2) dropped (left bl=-1), (2->3) kept
+    assert [r["shot_left_idx"] for r in rows] == [0, 2]
+    assert all(r["y_inconsistent"] in (0, 1) for r in rows)

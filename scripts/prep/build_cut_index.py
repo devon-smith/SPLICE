@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.data.movienet import (  # noqa: E402
     CUT_INDEX_COLUMNS,
     cut_rows_for_movie,
-    derive_label,
     load_shots_by_movie,
 )
 
@@ -67,16 +66,12 @@ def main() -> None:
 
     rows: list[dict] = []
     failed: list[str] = []
-    n_disagree = 0  # boundary_label vs scene-id derivation
+    n_dropped = 0  # cuts dropped because boundary_label == -1 (BaSSL "ignore" marker)
     for movie_id, (split, shots) in tqdm(sorted(by_movie.items()), desc="movies"):
         try:
             split = split_override.get(movie_id, split)
             movie_rows = cut_rows_for_movie(movie_id, split, shots, frames_dir, args.label_source)
-            for left, right in zip(shots, shots[1:]):
-                if left.boundary_label is not None and left.boundary_label != derive_label(
-                    left, right, "json"
-                ):
-                    n_disagree += 1
+            n_dropped += max(len(shots) - 1, 0) - len(movie_rows)
             rows.extend(movie_rows)
         except Exception as exc:  # noqa: BLE001 - keep one bad movie from killing the run
             log.warning("failed to parse %s: %s", movie_id, exc)
@@ -94,7 +89,7 @@ def main() -> None:
     log.info("wrote %d cuts to %s", len(df), out_path)
     log.info("positive (scene-boundary) cuts: %d (%.2f%%)", pos, 100 * pos / max(len(df), 1))
     log.info("splits: %s", df.groupby("split").size().to_dict())
-    log.info("boundary_label vs scene-id disagreements: %d", n_disagree)
+    log.info("dropped %d unlabeled cuts (boundary_label == -1)", n_dropped)
 
 
 if __name__ == "__main__":

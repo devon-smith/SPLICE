@@ -111,9 +111,16 @@ def cut_rows_for_movie(
     frames_dir: Path,
     label_source: str = "auto",
 ) -> list[dict]:
-    """Build one cut-index row per adjacent shot pair in a single movie."""
+    """Build one cut-index row per adjacent shot pair in a single movie.
+
+    Cuts whose left shot has ``boundary_label == -1`` are dropped: -1 is BaSSL's
+    "ignore" marker for transitions it leaves unannotated, so they carry no
+    reliable ground-truth label.
+    """
     rows: list[dict] = []
     for left, right in zip(shots, shots[1:]):
+        if left.boundary_label == -1:
+            continue
         rows.append(
             {
                 "movie_id": movie_id,
