@@ -59,7 +59,7 @@ def _cols(ranges: list[tuple[int, int]]) -> np.ndarray:
     return np.concatenate([np.arange(a, b) for a, b in ranges])
 
 
-def analysis_coefficients(clf) -> list[str]:
+def analysis_coefficients(clf) -> tuple[list[str], dict]:
     coef = clf[-1].coef_[0]  # logistic head, on standardised features
     md = [
         "## 1. Coefficient analysis (v0 logistic head)\n",
@@ -68,14 +68,16 @@ def analysis_coefficients(clf) -> list[str]:
         "| slice | dims | L1 norm | L2 norm | mean \\|coef\\| |",
         "|---|---|---|---|---|",
     ]
+    l2 = {}
     for name, (a, b) in SLICES.items():
         s = coef[a:b]
+        l2[name] = float(np.linalg.norm(s))
         md.append(
             f"| {name} | {b - a} | {np.abs(s).sum():.2f} | "
             f"{np.linalg.norm(s):.2f} | {np.abs(s).mean():.4f} |"
         )
     md.append("")
-    return md
+    return md, l2
 
 
 def analysis_permutation(clf, x_test, y_test, n_repeat=5) -> tuple[list[str], dict]:
@@ -182,7 +184,8 @@ def main() -> None:
         "Which parts of the 2305-d pair feature carry the signal? "
         "Feature layout: `[ eL(768) | eR(768) | |eL-eR|(768) | cos(1) ]`.\n"
     )
-    md += analysis_coefficients(clf)
+    coef_md, coef_l2 = analysis_coefficients(clf)
+    md += coef_md
     perm_md, drops = analysis_permutation(clf, features[masks["test"]], y[masks["test"]])
     md += perm_md
     abl_md, ablation = analysis_ablations(features, y, masks)
@@ -222,7 +225,20 @@ def main() -> None:
     fig.tight_layout()
     fig.savefig(REPO / "reports" / "figures" / "v1_ablation_auprc.png", dpi=120)
     plt.close(fig)
-    print("wrote v1_feature_importance.md + v1_ablation_auprc.png")
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    slices = list(coef_l2)
+    ax.bar(range(len(slices)), [coef_l2[s] for s in slices], color="tab:purple", alpha=0.85)
+    ax.set(
+        xticks=range(len(slices)),
+        ylabel="L2 norm of coefficients",
+        title="v0 logistic coefficient L2 norm by feature slice",
+    )
+    ax.set_xticklabels(slices, rotation=15, ha="right", fontsize=9)
+    fig.tight_layout()
+    fig.savefig(REPO / "reports" / "figures" / "v1_coefficient_norms.png", dpi=120)
+    plt.close(fig)
+    print("wrote v1_feature_importance.md + v1_ablation_auprc.png + v1_coefficient_norms.png")
 
 
 if __name__ == "__main__":
