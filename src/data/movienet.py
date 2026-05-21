@@ -52,6 +52,12 @@ def keyframe_path(frames_dir: Path, movie_id: str, shot_idx: int, img: int) -> P
     return frames_dir / movie_id / f"shot_{shot_idx:04d}_img_{img}.jpg"
 
 
+def keyframe_key(path: str | Path) -> str:
+    """Stable ``<movie_id>/<filename>`` key for a keyframe (used by the embedding cache)."""
+    p = Path(path)
+    return f"{p.parent.name}/{p.name}"
+
+
 def load_shots_by_movie(anno_dir: Path) -> dict[str, tuple[str, list[Shot]]]:
     """Parse the three NDJSON files into ``{movie_id: (split, shots sorted by idx)}``."""
     by_movie: dict[str, tuple[str, list[Shot]]] = {}
