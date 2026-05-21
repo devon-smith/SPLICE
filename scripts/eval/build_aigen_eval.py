@@ -3,9 +3,13 @@
 Input layout::
 
     <clips_root>/
-      labels.csv               pair_id,source,y_inconsistent,notes
+      labels.csv               schema: scripts/aigen/labels_template.csv
       <source>/pair_<id>_left.mp4
       <source>/pair_<id>_right.mp4
+
+labels.csv must carry ``pair_id``, ``source`` and a label column -- either
+``intended_label`` (the sourcing template's column) or ``y_inconsistent``.
+Rows marked ``quality_check=discard`` are dropped before processing.
 
 For each labelled pair this extracts three uniform keyframes from each clip
 (img0/1/2 = 0/50/100% of duration, matching MovieNet's 3-keyframes-per-shot
@@ -35,7 +39,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("build_aigen_eval")
 
 MAX_SIDE = (1280, 720)  # 720p cap, aspect preserved
-REQUIRED_COLS = {"pair_id", "source", "y_inconsistent"}
+REQUIRED_COLS = {"pair_id", "source"}
+LABEL_COLS = ("intended_label", "y_inconsistent")  # accept either; intent-based label
 
 
 def _save_keyframes(clip: Path, dst_dir: Path, side: str) -> list[str]:
@@ -69,8 +74,22 @@ def main() -> None:
     missing_cols = REQUIRED_COLS - set(labels.columns)
     if missing_cols:
         raise SystemExit(f"labels.csv missing required columns: {sorted(missing_cols)}")
+    label_col = next((c for c in LABEL_COLS if c in labels.columns), None)
+    if label_col is None:
+        raise SystemExit(f"labels.csv needs a label column, one of {list(LABEL_COLS)}")
+    labels = labels.rename(columns={label_col: "y_inconsistent"})
+
+    # drop pairs the generator flagged unusable before they ever reach the eval
+    if "quality_check" in labels.columns:
+        discard = labels["quality_check"].astype(str).str.strip().str.lower() == "discard"
+        if discard.any():
+            log.info("skipping %d pairs marked quality_check=discard", int(discard.sum()))
+            labels = labels[~discard].reset_index(drop=True)
+
+    labels["y_inconsistent"] = pd.to_numeric(labels["y_inconsistent"], errors="coerce")
     if not labels["y_inconsistent"].isin([0, 1]).all():
-        raise SystemExit("labels.csv: y_inconsistent must be 0 or 1")
+        raise SystemExit(f"labels.csv: {label_col} must be 0 or 1 for every kept row")
+    labels["y_inconsistent"] = labels["y_inconsistent"].astype(int)
     log.info(
         "labels.csv: %d pairs across sources %s", len(labels), sorted(labels["source"].unique())
     )
@@ -117,10 +136,11 @@ def main() -> None:
                 "split": "test",
                 "source": source,
                 "notes": lab.get("notes", ""),
+                "shot_type": lab.get("shot_type", ""),
             }
         )
 
-    df = pd.DataFrame(rows, columns=CUT_INDEX_COLUMNS + ["source", "notes"])
+    df = pd.DataFrame(rows, columns=CUT_INDEX_COLUMNS + ["source", "notes", "shot_type"])
     df.to_parquet(out_dir / "cuts.parquet", index=False)
 
     summary = {
@@ -130,6 +150,7 @@ def main() -> None:
         "failure_reasons": failed,
         "counts_by_source": df["source"].value_counts().to_dict(),
         "counts_by_label": {str(k): int(v) for k, v in df["y_inconsistent"].value_counts().items()},
+        "counts_by_shot_type": {str(k): int(v) for k, v in df["shot_type"].value_counts().items()},
     }
     (out_dir / "build_summary.json").write_text(json.dumps(summary, indent=2))
     if failed:
