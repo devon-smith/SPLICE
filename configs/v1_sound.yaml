@@ -1,0 +1,21 @@
+model: v1.5_mlp_sound
+features: dino_v0_boundary
+head:
+  hidden:
+  - 512
+  - 128
+  dropout: 0.1
+optim:
+  name: adam
+  lr: 0.001
+  weight_decay: 0.0001
+  schedule: cosine
+train:
+  epochs: 50
+  patience: 5
+  batch_size: 1024
+seeds:
+- 0
+- 1
+- 2
+selected_by: mean val AUPRC over 3 seeds, 6x4 dropout x weight_decay grid
