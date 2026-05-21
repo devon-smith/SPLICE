@@ -1,4 +1,5 @@
 """Smoke test: load DINOv3, run a dummy forward pass, print shapes."""
+
 import torch
 from transformers import AutoImageProcessor, AutoModel
 
