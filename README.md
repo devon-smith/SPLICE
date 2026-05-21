@@ -58,3 +58,4 @@ python scripts/eval/calibrate_threshold.py    # within-shot threshold calibratio
 - `src/` — importable modules (`data/`, `models/`, `eval/`, `losses/`)
 - `tests/` — unit tests; run with `pytest tests/`
 - `reports/` — spec, related work, milestone results
+
