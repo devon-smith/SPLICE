@@ -198,14 +198,14 @@ def main() -> None:
         clip_emb = CLIPImageEncoder(model_id=args.clip_model_id).encode_paths(uniq)
         clip_all = cosine_distance_scores(clip_emb, left, right)
 
-        # eval_ids are ordered val-then-test by construction of eval_mask
-        n_val = int(is_val.sum())
+        # eval rows are movie-sorted (val/test interleaved) -> split by the split column
+        eval_split = meta.loc[eval_mask, "split"].to_numpy()
         for name, allvals in (("hsv_chisq", hsv_all), ("clip_cosine", clip_all)):
             scores[name] = {
                 "val_y": y[is_val],
-                "val_s": allvals[:n_val],
+                "val_s": allvals[eval_split == "val"],
                 "test_y": y[is_test],
-                "test_s": allvals[n_val:],
+                "test_s": allvals[eval_split == "test"],
             }
     else:
         MODEL_ORDER[:] = ["logistic", "raw_dino_cosine"]
