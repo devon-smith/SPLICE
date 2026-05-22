@@ -20,3 +20,6 @@ outputs/
 .idea/
 logs/
 reports/figures/error_grid/
+
+# Claude Code project config -- kept local, not part of the repo
+CLAUDE.md
