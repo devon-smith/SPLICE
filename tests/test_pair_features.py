@@ -4,7 +4,9 @@ import numpy as np
 
 from src.data.pairs import (
     EMBEDDING_DIM,
+    FUSED_PAIR_FEATURE_DIM,
     PAIR_FEATURE_DIM,
+    build_fused_pair_features,
     build_pair_feature,
     build_pair_features_batch,
 )
@@ -15,6 +17,7 @@ RNG = np.random.default_rng(0)
 def test_feature_dim_constants():
     assert EMBEDDING_DIM == 768
     assert PAIR_FEATURE_DIM == 2305
+    assert FUSED_PAIR_FEATURE_DIM == 4610
 
 
 def test_build_pair_feature_shape_and_layout():
@@ -51,3 +54,21 @@ def test_batch_matches_single():
     assert batch.shape == (5, 2305)
     for i in range(5):
         np.testing.assert_allclose(batch[i], build_pair_feature(e_l[i], e_r[i]), rtol=1e-5)
+
+
+def test_fused_pair_features_shape_and_layout():
+    dino_l = RNG.standard_normal((4, 768)).astype(np.float32)
+    dino_r = RNG.standard_normal((4, 768)).astype(np.float32)
+    clip_l = RNG.standard_normal((4, 768)).astype(np.float32)
+    clip_r = RNG.standard_normal((4, 768)).astype(np.float32)
+    fused = build_fused_pair_features(dino_l, dino_r, clip_l, clip_r)
+    assert fused.shape == (4, 4610)
+    assert fused.dtype == np.float32
+    assert not np.isnan(fused).any()
+    # the two halves are the standalone DINOv2 and CLIP pair features
+    np.testing.assert_allclose(
+        fused[:, :2305], build_pair_features_batch(dino_l, dino_r), rtol=1e-5
+    )
+    np.testing.assert_allclose(
+        fused[:, 2305:], build_pair_features_batch(clip_l, clip_r), rtol=1e-5
+    )
