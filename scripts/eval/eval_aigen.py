@@ -135,8 +135,13 @@ def score_image_baselines(cuts: pd.DataFrame) -> dict:
 def metric_row(name: str, y: np.ndarray, s: np.ndarray, thr: dict) -> dict:
     ok = ~np.isnan(s)
     y, s = y[ok], s[ok]
-    rank = ranking_metrics(y, s)
-    row = {"model": name, "n": int(len(y)), "auroc": rank["auroc"], "auprc": rank["auprc"]}
+    row = {"model": name, "n": int(len(y))}
+    if len(np.unique(y)) < 2:
+        # ranking metrics are undefined on single-class subsets
+        row.update({"auroc": float("nan"), "auprc": float("nan"), "note": "single-class"})
+    else:
+        rank = ranking_metrics(y, s)
+        row.update({"auroc": rank["auroc"], "auprc": rank["auprc"]})
     if name in thr and "val_thr" in thr[name]:
         row["f1_at_val"] = threshold_metrics(y, s, thr[name]["val_thr"])["f1"]
     if name in thr and "tau99" in thr[name]:
