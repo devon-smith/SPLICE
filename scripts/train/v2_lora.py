@@ -2,8 +2,9 @@
 
 Adds LoRA adapters to DINOv2's attention query and value projections (all 12
 layers of ViT-B/14). All other backbone params remain frozen. The pair feature
-and MLP head are identical to v1, but built differentiably so gradients flow
-through the backbone. Backbone and head use separate learning rates.
+and MLP head are v1-style, with LayerNorm on the pair feature and differentiable
+embeddings so gradients flow through the backbone. Backbone and head use separate
+learning rates.
 
 Single run (overriding config defaults):
   python scripts/train/v2_lora.py \\
@@ -41,7 +42,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.eval.metrics import best_f1_threshold, ranking_metrics, threshold_metrics  # noqa: E402
 
 try:
-    from peft import LoraConfig, get_peft_model
+    from peft import (
+        LoraConfig,
+        get_peft_model,
+        get_peft_model_state_dict,
+        set_peft_model_state_dict,
+    )
 except ImportError:
     raise SystemExit("peft not installed — run: pip install peft")
 
@@ -88,11 +94,12 @@ class CutDataset(Dataset):
 # ---------------------------------------------------------------------------
 
 class PairMLP(nn.Module):
-    """[eL | eR | |eL-eR| | cos(eL,eR)] -> scalar logit. Same arch as v1."""
+    """LayerNorm([eL | eR | |eL-eR| | cos(eL,eR)]) -> scalar logit."""
 
     def __init__(self, emb_dim: int = 768, hidden=(512, 128), dropout: float = 0.1) -> None:
         super().__init__()
         in_dim = 2 * emb_dim + emb_dim + 1  # 2305
+        self.norm = nn.LayerNorm(in_dim)
         layers: list[nn.Module] = []
         dim = in_dim
         for w in hidden:
@@ -104,7 +111,8 @@ class PairMLP(nn.Module):
     def forward(self, e_l: torch.Tensor, e_r: torch.Tensor) -> torch.Tensor:
         abs_diff = (e_l - e_r).abs()
         cos = F.cosine_similarity(e_l, e_r, eps=1e-8).unsqueeze(-1)
-        return self.net(torch.cat([e_l, e_r, abs_diff, cos], dim=-1)).squeeze(-1)
+        x = torch.cat([e_l, e_r, abs_diff, cos], dim=-1)
+        return self.net(self.norm(x)).squeeze(-1)
 
 
 def _build_backbone(model_id: str, r: int, lora_alpha: int, target_modules: list, lora_dropout: float):
@@ -143,8 +151,117 @@ def _sample_epoch(df: pd.DataFrame, n: int, rng: np.random.Generator) -> pd.Data
     return df.iloc[rng.choice(len(df), n, replace=False)].reset_index(drop=True)
 
 
+def _checkpoint_path(out_dir: Path, run_name: str, name: str) -> Path:
+    return out_dir / run_name / "checkpoints" / f"{name}.pt"
+
+
+def _torch_load_checkpoint(path: Path, device: str) -> dict:
+    try:
+        return torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location=device)
+
+
+def _checkpoint_payload(
+    backbone,
+    head: nn.Module,
+    optim: torch.optim.Optimizer,
+    sched,
+    scaler: GradScaler,
+    epoch: int,
+    best_auprc: float,
+    best_epoch: int,
+    stale: int,
+    rng: np.random.Generator,
+    cfg: dict,
+    run_name: str,
+    seed: int,
+) -> dict:
+    return {
+        "epoch": epoch,
+        "best_auprc": best_auprc,
+        "best_epoch": best_epoch,
+        "stale": stale,
+        "backbone_lora_state": {
+            k: v.detach().cpu() for k, v in get_peft_model_state_dict(backbone).items()
+        },
+        "head_state": {k: v.detach().cpu() for k, v in head.state_dict().items()},
+        "optim_state": optim.state_dict(),
+        "sched_state": sched.state_dict(),
+        "scaler_state": scaler.state_dict(),
+        "torch_rng_state": torch.get_rng_state(),
+        "cuda_rng_state_all": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+        "numpy_rng_state": np.random.get_state(),
+        "epoch_rng_state": rng.bit_generator.state,
+        "cfg": cfg,
+        "run_name": run_name,
+        "seed": seed,
+    }
+
+
+def _save_checkpoint(
+    out_dir: Path,
+    run_name: str,
+    name: str,
+    backbone,
+    head: nn.Module,
+    optim: torch.optim.Optimizer,
+    sched,
+    scaler: GradScaler,
+    epoch: int,
+    best_auprc: float,
+    best_epoch: int,
+    stale: int,
+    rng: np.random.Generator,
+    cfg: dict,
+    seed: int,
+) -> None:
+    path = _checkpoint_path(out_dir, run_name, name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(".tmp")
+    torch.save(
+        _checkpoint_payload(
+            backbone, head, optim, sched, scaler, epoch, best_auprc, best_epoch, stale,
+            rng, cfg, run_name, seed,
+        ),
+        tmp_path,
+    )
+    tmp_path.replace(path)
+
+
+def _load_checkpoint(
+    path: Path,
+    backbone,
+    head: nn.Module,
+    optim: torch.optim.Optimizer,
+    sched,
+    scaler: GradScaler,
+    rng: np.random.Generator,
+    device: str,
+) -> tuple[int, float, int, int]:
+    ckpt = _torch_load_checkpoint(path, device)
+    set_peft_model_state_dict(backbone, ckpt["backbone_lora_state"])
+    head.load_state_dict(ckpt["head_state"])
+    optim.load_state_dict(ckpt["optim_state"])
+    sched.load_state_dict(ckpt["sched_state"])
+    scaler.load_state_dict(ckpt["scaler_state"])
+    torch.set_rng_state(ckpt["torch_rng_state"].cpu())
+    if ckpt.get("cuda_rng_state_all") is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(ckpt["cuda_rng_state_all"])
+    if ckpt.get("numpy_rng_state") is not None:
+        np.random.set_state(ckpt["numpy_rng_state"])
+    if ckpt.get("epoch_rng_state") is not None:
+        rng.bit_generator.state = ckpt["epoch_rng_state"]
+    return (
+        int(ckpt["epoch"]) + 1,
+        float(ckpt["best_auprc"]),
+        int(ckpt["best_epoch"]),
+        int(ckpt["stale"]),
+    )
+
+
 def train_one(cut_index: str, out_dir: Path, cfg: dict, run_name: str,
-              wandb_project: str, wandb_mode: str, seed: int) -> dict:
+              wandb_project: str, wandb_mode: str, seed: int, resume: str | None = None) -> dict:
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -201,9 +318,16 @@ def train_one(cut_index: str, out_dir: Path, cfg: dict, run_name: str,
     scaler = GradScaler(enabled=on_gpu)
     run = _open_wandb(wandb_project, wandb_mode, run_name, {**cfg, "seed": seed})
 
-    best_auprc, best_bb_state, best_head_state, best_epoch, stale = -1.0, None, None, -1, 0
+    best_auprc, best_epoch, stale = -1.0, -1, 0
+    start_epoch = 0
+    if resume is not None:
+        start_epoch, best_auprc, best_epoch, stale = _load_checkpoint(
+            Path(resume), backbone, head, optim, sched, scaler, rng, device
+        )
+        log.info("resumed %s at epoch %d (best %.4f ep %d)",
+                 resume, start_epoch, best_auprc, best_epoch)
 
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         backbone.train()
         head.train()
         epoch_df = _sample_epoch(splits["train"], max_per_epoch, rng)
@@ -217,6 +341,7 @@ def train_one(cut_index: str, out_dir: Path, cfg: dict, run_name: str,
         )
         running, n_seen = 0.0, 0
         optim.zero_grad()
+        stepped_at_end = False
         for step, (pv_l, pv_r, y) in enumerate(loader):
             pv_l = pv_l.to(device, non_blocking=True)
             pv_r = pv_r.to(device, non_blocking=True)
@@ -232,9 +357,16 @@ def train_one(cut_index: str, out_dir: Path, cfg: dict, run_name: str,
                 scaler.step(optim)
                 scaler.update()
                 optim.zero_grad()
+                stepped_at_end = True
+            else:
+                stepped_at_end = False
 
             running += loss.item() * grad_accum * len(y)
             n_seen += len(y)
+        if n_seen and not stepped_at_end:
+            scaler.step(optim)
+            scaler.update()
+            optim.zero_grad()
         sched.step()
 
         backbone.eval()
@@ -248,16 +380,23 @@ def train_one(cut_index: str, out_dir: Path, cfg: dict, run_name: str,
 
         if val_auprc > best_auprc:
             best_auprc, best_epoch, stale = val_auprc, epoch, 0
-            best_bb_state = {k: v.cpu() for k, v in backbone.state_dict().items()}
-            best_head_state = copy.deepcopy(head.state_dict())
+            _save_checkpoint(
+                out_dir, run_name, "best", backbone, head, optim, sched, scaler, epoch,
+                best_auprc, best_epoch, stale, rng, cfg, seed,
+            )
         else:
             stale += 1
-            if stale >= patience:
-                log.info("early stop at epoch %d (best ep %d)", epoch, best_epoch)
-                break
+        _save_checkpoint(
+            out_dir, run_name, "last", backbone, head, optim, sched, scaler, epoch,
+            best_auprc, best_epoch, stale, rng, cfg, seed,
+        )
+        if stale >= patience:
+            log.info("early stop at epoch %d (best ep %d)", epoch, best_epoch)
+            break
 
-    backbone.load_state_dict(best_bb_state)
-    head.load_state_dict(best_head_state)
+    best_ckpt = _torch_load_checkpoint(_checkpoint_path(out_dir, run_name, "best"), device)
+    set_peft_model_state_dict(backbone, best_ckpt["backbone_lora_state"])
+    head.load_state_dict(best_ckpt["head_state"])
     backbone.eval()
     head.eval()
 
@@ -290,7 +429,7 @@ def train_one(cut_index: str, out_dir: Path, cfg: dict, run_name: str,
     run_dir = out_dir / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     backbone.save_pretrained(run_dir / "backbone_lora")   # saves only adapter weights
-    torch.save(best_head_state, run_dir / "head.pt")
+    torch.save(best_ckpt["head_state"], run_dir / "head.pt")
     np.savez(run_dir / "scores.npz", val_s=val_scores, val_y=val_y, test_s=test_scores, test_y=test_y)
     (run_dir / "results.json").write_text(json.dumps(result, indent=2))
     _wandb_log(run, {f"test_{k}": v for k, v in rank.items() if isinstance(v, float)})
@@ -359,6 +498,8 @@ def main() -> None:
     ap.add_argument("--lr_backbone", type=float, default=None)
     ap.add_argument("--lr_head", type=float, default=None)
     ap.add_argument("--epochs", type=int, default=None)
+    ap.add_argument("--resume", default=None,
+                    help="path to a last.pt/best.pt checkpoint from this script")
     ap.add_argument("--seed", type=int, default=231)
     ap.add_argument("--wandb_project", default="splice-v2-lora")
     ap.add_argument("--wandb_mode", default="online", choices=["online", "offline", "disabled"])
@@ -387,8 +528,8 @@ def main() -> None:
                                        args.wandb_project, args.wandb_mode, args.seed)
                     all_results.append(result)
                     _print_result(result)
-        print("\n=== sweep summary (sorted by test AUPRC) ===")
-        for row in sorted(all_results, key=lambda x: -x["test_auprc"]):
+        print("\n=== sweep summary (sorted by val AUPRC) ===")
+        for row in sorted(all_results, key=lambda x: -x["val_auprc"]):
             print(f"  {row['run_name']:35s}  val {row['val_auprc']:.4f}  test {row['test_auprc']:.4f}")
         (out_dir / "sweep_results.json").write_text(json.dumps(all_results, indent=2))
     else:
@@ -404,7 +545,7 @@ def main() -> None:
             cfg["train"]["epochs"] = args.epochs
         run_name = f"r{cfg['lora']['r']}_a{cfg['lora']['lora_alpha']}"
         result = train_one(args.cut_index, out_dir, cfg, run_name,
-                           args.wandb_project, args.wandb_mode, args.seed)
+                           args.wandb_project, args.wandb_mode, args.seed, args.resume)
         _print_result(result)
 
 

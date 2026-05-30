@@ -14,8 +14,8 @@ optim:
   weight_decay: 1.0e-4
   schedule: cosine
 train:
-  epochs: 10
-  patience: 3
+  epochs: 20
+  patience: 5
   batch_size: 32          # pairs per step; DINOv2 sees 2x images
   max_cuts_per_epoch: 25000   # random subsample of train each epoch for fast iterations
   grad_accumulation: 4    # effective batch = 128
