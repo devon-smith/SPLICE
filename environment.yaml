@@ -14,6 +14,11 @@ dependencies:
       - timm
       - datasets
       - webdataset
+      - numpy
+      - pandas
+      - pyarrow
+      - scikit-learn
+      - joblib
       - h5py
       - opencv-python-headless
       - pillow
