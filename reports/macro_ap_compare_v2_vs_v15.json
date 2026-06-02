@@ -1,0 +1,15 @@
+{
+  "delta_mean": 0.04799258912644,
+  "ci_low": 0.036655668752104124,
+  "ci_high": 0.0587181864340824,
+  "excludes_zero": true,
+  "macro_ap_a": 0.467485413251049,
+  "macro_ap_b": 0.419492824124609,
+  "n_resamples": 1000,
+  "n_movies": 64,
+  "a_path": "/mnt/disks/splice-data/outputs/v2_lora_20260530/r8_a16/scores.npz",
+  "b_path": "/mnt/disks/splice-data/outputs/v1_sound/scores.npz",
+  "score_key_a": "test_s",
+  "score_key_b": "seed2_test_s",
+  "n_test_cuts": 105095
+}

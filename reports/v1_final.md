@@ -64,7 +64,7 @@ where `eL`, `eR` are the embeddings of the two boundary keyframes (left shot
 ## 4. Results
 
 **Headline (test split).** F1@val = F1 at the val-optimal threshold; F1@τ99 /
-F1@τ95 = F1 at within-shot-calibrated thresholds (§6).
+F1@τ95 = F1 at within-shot-calibrated thresholds (§7).
 
 | Model | AUROC | AUPRC | F1@val | F1@τ99 | F1@τ95 |
 |---|---|---|---|---|---|
@@ -105,7 +105,35 @@ exactly the signals that define a visual cut. CLIP is not "bad" — it is
 optimised for the wrong invariance. DINOv2's self-supervised objective preserves
 that low-level appearance information, which is why it is the right backbone.
 
-## 5. Stratified analysis
+## 5. Macro per-movie AP (literature-aligned metric)
+
+The MovieNet papers (ShotCoL, BaSSL, TranS4mer, MEGA, MASRC, MHRT, NeighborNet)
+report AP as the *mean of per-movie AP values*, not pooled AP over every test
+pair. The pair-level AUPRC in §4 is the right comparison among our own models,
+but is not directly comparable to published numbers. Macro AP recomputed by
+`scripts/eval/compute_macro_ap.py`; full report at `reports/macro_ap.md`.
+
+| Model | Pooled AUPRC | Macro per-movie AP | n_movies |
+|---|--:|--:|--:|
+| v0 logistic | 0.356 | **0.372** | 64 |
+| v1.5 MLP (3-seed mean ± std) | 0.405 ± 0.002 | **0.418 ± 0.003** | 64 |
+| v2 LoRA r=8 α=16 | 0.452 | **0.468** | 64 |
+
+Macro is consistently ~+0.015 above pooled for every model; the metric choice
+does not reorder them. Under movie-level paired bootstrap (1000 resamples) the
+v2 over v1.5 gap is **+0.048 macro AP, 95% CI [+0.037, +0.059]** (excludes 0,
+significant), the same magnitude as v1.5 over v0 (+0.048, CI [+0.038, +0.060]).
+On the comparable metric v2's 46.8 AP sits ~10.6 points below BaSSL (57.40),
+14 below TranS4mer, and 25-26 below NeighborNet / MASRC. The gap to SOTA is
+real but is not catastrophically larger than the pooled-AUPRC framing suggested
+— this is the basis on which v2 should be reported alongside published work.
+
+All v2 vs v1.5 (and v1.5 vs v0) statistical claims going forward use the
+movie-level paired bootstrap from `macro_ap.md`, not the pair-level resampling
+in `v1_significance.md` — pair-level resampling underestimates uncertainty when
+pairs from the same movie are correlated.
+
+## 6. Stratified analysis
 
 **By class.** v1.5 mean predicted score is 0.69 on y=1 cuts vs 0.30 on y=0 —
 clean separation; per-class hit-rates re-aggregate exactly to the 0.886 accuracy.
@@ -130,7 +158,7 @@ late ones (0.39). Per-movie AUPRC ranges ~0.11–0.65 — continuity is far easi
 score in some films than others, so the bootstrap CI, not the point estimate, is
 the honest summary.
 
-## 6. Calibration
+## 7. Calibration
 
 The within-shot keyframe pairs of a single shot are, by construction, the same
 continuous scene; their score distribution defines "natural" variation, and its
@@ -151,7 +179,7 @@ side-effect of class-weighted training). **Platt scaling** fitted on val fixes
 this on test (ECE 0.225 → 0.012, Brier → 0.052) with AUROC/AUPRC unchanged;
 deployment should use Platt-scaled probabilities (`figures/v1_reliability.png`).
 
-## 7. Error analysis
+## 8. Error analysis
 
 At the F1-optimal threshold v1.5 produces 5,863 false positives (6.0% of
 negatives) and 3,724 false negatives (51.3% of positives — it misses about half
@@ -170,7 +198,7 @@ The top-50 FP/FN with all model scores and keyframe grids are in
 failures or MovieNet labelling noise (~0.86% source disagreement) is an open
 question for qualitative review.
 
-## 8. Feature importance
+## 9. Feature importance
 
 On the 2305-d feature (`v1_feature_importance.md`):
 
@@ -186,7 +214,7 @@ On the 2305-d feature (`v1_feature_importance.md`):
   frozen embedding — mean luminance R² 0.68, contrast 0.46, saturation 0.37 — the
   exact cues a visual cut disturbs.
 
-## 9. Limitations
+## 10. Limitations
 
 - **Frozen-feature ceiling.** The 72-run regularization sweep moved val AUPRC by
   ≤0.006; the v1 MLP overfits in ~2 epochs. Head capacity is not the constraint.
@@ -201,7 +229,7 @@ On the 2305-d feature (`v1_feature_importance.md`):
 - **AI-generated evaluation not yet performed** and **v2 fine-tuning not yet
   trained** — both deliberately out of scope for v1.
 
-## 10. Next steps
+## 11. Next steps
 
 The frozen-feature ceiling is the bridge to v2. The supervised signal in MovieNet
 has reached the limit of what frozen DINOv2 features can represent, so the next
