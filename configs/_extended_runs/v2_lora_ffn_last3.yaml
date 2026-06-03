@@ -1,0 +1,27 @@
+backbone: facebook/dinov2-base
+head:
+  hidden: [512, 128]
+  dropout: 0.1
+lora:
+  target_modules:
+    - encoder.layer.9.mlp.fc1
+    - encoder.layer.9.mlp.fc2
+    - encoder.layer.10.mlp.fc1
+    - encoder.layer.10.mlp.fc2
+    - encoder.layer.11.mlp.fc1
+    - encoder.layer.11.mlp.fc2
+  r: 8
+  lora_alpha: 16
+  lora_dropout: 0.1
+  bias: none
+optim:
+  lr_head: 1.0e-3
+  lr_backbone: 5.0e-5
+  weight_decay: 1.0e-4
+  schedule: cosine
+train:
+  epochs: 50
+  patience: 10
+  batch_size: 32
+  max_cuts_per_epoch: 25000
+  grad_accumulation: 4
