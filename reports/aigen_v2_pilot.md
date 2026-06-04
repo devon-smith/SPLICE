@@ -83,26 +83,45 @@ producing high-variance, low-signal predictions on out-of-distribution video.
 
 ## Read
 
-**v2's MovieNet macro AP gain does not transfer to the Veo pilot.** This is a
-real finding, not noise: the seed-to-seed std is small, the Spearman drop
-(0.44 → 0.39) is consistent with the bucket-mean breakdown, and the qualitative
-miss on A005 has a plausible mechanism — LoRA fine-tuning specialized DINOv2
-toward MovieNet's lighting/composition-correlated continuity signal and away
-from the identity-semantic signal that Veo discontinuities depend on.
+v2 does not carry its MovieNet macro AP gain forward into the Veo pilot —
+its Spearman with Dispatch buckets (+0.39) is the lowest of the four scorers.
+But before concluding "LoRA suppressed identity features", we ran a full
+diagnostic at `reports/aigen_diagnostic.md` which materially changes the
+framing. The headline findings of that diagnostic:
 
-The practical recommendation from `aigen_rank_based.md` was already to use a
-**CLIP-percentile flag** for Veo identity drift, not v1.5 or v0. v2 does not
-change that: v2 is strictly worse than CLIP on Veo, and even worse than v0.
-For deployment on AI-gen continuity flagging, v2 is the wrong tool — keep
-CLIP for that use case.
+1. **Pipeline is clean** — Spearman re-computed from scratch matches
+   exactly; frame and label mappings verified.
+2. **Cross-model rank Spearman is low** — v1.5 vs v2 ρ = +0.15 (essentially
+   zero). The models *do not agree among themselves*. Each picks a different
+   subset of Veo pairs to score high. v0 catches A015, v1.5 catches A005, v2
+   catches A015. No model catches both major pairs strongly.
+3. **Leave-one-out: v2's biggest single-pair penalty is A003, not A005.**
+   Dropping A003 (a clean pair v2 scores high) lifts v2's ρ from 0.39 to
+   0.68. The "v2 missed A005" framing was misleading — v2's bigger problem on
+   this set is a *false alarm* on A003 (a lighting / colour-grade shift at the
+   boundary).
+4. **A005's identity drift isn't concentrated at the boundary** — pixel-RMS
+   between A005's boundary frames (left_img2 + right_img0) is 0.28, *less*
+   than the within-clip motion (0.26-0.29). Our scorer sees a boundary that
+   isn't visibly more discontinuous than two random adjacent frames within
+   either clip. Dispatch presumably judged identity at clip level — a
+   different task from frame-pair boundary continuity.
 
-For deployment on **MovieNet-style real-film cuts**, v2 remains the strongest
-of the SPLICE heads (macro AP 0.469 vs v1.5's 0.418). The two distributions
-need different scorers; we have evidence now that the same scorer can't win
-on both.
+**Revised conclusion**: with n=10, the cross-model Spearman ordering swings by
+±0.29 on single-pair removal. The "v2 is structurally worse on AI-gen" claim
+is **not supportable from this evidence**. What we can say honestly:
 
-**The single biggest caveat remains n=10.** Two of those ten are the only
-"major" examples, and v2 catches one (A015) and badly misses the other (A005).
-With more Veo pairs the picture could shift either direction. The Spearman is
-already not significant for v1.5 (p=0.20) or v2 (p=0.27) — these are
-suggestive ordering tests, not confirmatory ones.
+- v2 does not *win* on this small pilot, in contrast to its clean MovieNet win.
+- A real **task mismatch** exists: our boundary-frame scorer cannot detect
+  identity drift that's distributed across full clips (a known property of the
+  Veo failure mode, not a v2-specific deficiency).
+- For Veo identity-drift deployment, the existing CLIP-percentile flag (from
+  `aigen_rank_based.md`) remains the recommended tool — that recommendation
+  was made independently of v2 and is unchanged.
+
+**For the final report, the AI-gen section should say "the MovieNet gain
+doesn't transfer to this small pilot, the failure mode looks like
+task-mismatch rather than v2 regression, n=10" and leave it there.** The
+"LoRA suppressed identity features" story is a plausible mechanism but rests
+on a single pair where the underlying evidence (pixel-RMS) points to frame
+selection, not feature suppression.
