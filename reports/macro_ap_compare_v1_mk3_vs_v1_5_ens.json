@@ -1,0 +1,15 @@
+{
+  "delta_mean": 0.0002609854650169052,
+  "ci_low": -0.010163907446775398,
+  "ci_high": 0.010539471721567398,
+  "excludes_zero": false,
+  "macro_ap_a": 0.4349654504501959,
+  "macro_ap_b": 0.434704464985179,
+  "n_resamples": 1000,
+  "n_movies": 64,
+  "a_path": "/mnt/disks/splice-data/outputs/v1_mk3_seed42/scores.npz",
+  "b_path": "/mnt/disks/splice-data/outputs/v1_sound/v1_5_3seed_mean_scores.npz",
+  "score_key_a": "test_s",
+  "score_key_b": "test_s",
+  "n_test_cuts": 105095
+}

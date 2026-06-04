@@ -1,0 +1,15 @@
+{
+  "delta_mean": 0.0035852102609582603,
+  "ci_low": -0.0009051145974278238,
+  "ci_high": 0.008049734609032022,
+  "excludes_zero": false,
+  "macro_ap_a": 0.3751038283883229,
+  "macro_ap_b": 0.37151861812736464,
+  "n_resamples": 1000,
+  "n_movies": 64,
+  "a_path": "/mnt/disks/splice-data/outputs/v0_hadamard/scores.npz",
+  "b_path": "/mnt/disks/splice-data/outputs/v0/scores.npz",
+  "score_key_a": "logistic__test_s",
+  "score_key_b": "logistic__test_s",
+  "n_test_cuts": 105095
+}

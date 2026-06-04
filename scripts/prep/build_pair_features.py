@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.data.movienet import keyframe_key  # noqa: E402
 from src.data.pairs import (  # noqa: E402
     PAIR_FEATURE_DIM,
+    PAIR_FEATURE_DIM_HADAMARD,
     build_pair_features_batch,
     load_embeddings,
 )
@@ -60,6 +61,8 @@ def main() -> None:
     ap.add_argument("--embeddings", default=DEFAULT_EMB)
     ap.add_argument("--mode", choices=list(MODE_COLS), default="boundary")
     ap.add_argument("--out", default=None, help="default: /mnt/.../pairs/dino_v0_<mode>")
+    ap.add_argument("--include_hadamard", action="store_true",
+                    help="append the elementwise product eL*eR -> 3073-d output")
     args = ap.parse_args()
 
     out_dir = Path(args.out) if args.out else Path(DEFAULT_OUT_TPL.format(mode=args.mode))
@@ -86,8 +89,9 @@ def main() -> None:
     # mean over keyframes (1 frame for boundary mode, 3 for mean_pool_3)
     e_left = emb[left_rows].mean(axis=1)
     e_right = emb[right_rows].mean(axis=1)
-    features = build_pair_features_batch(e_left, e_right)
-    assert features.shape == (len(df), PAIR_FEATURE_DIM), features.shape
+    features = build_pair_features_batch(e_left, e_right, include_hadamard=args.include_hadamard)
+    expected_dim = PAIR_FEATURE_DIM_HADAMARD if args.include_hadamard else PAIR_FEATURE_DIM
+    assert features.shape == (len(df), expected_dim), features.shape
     assert not np.isnan(features).any(), "NaN in pair features"
 
     meta = pd.DataFrame(
@@ -105,7 +109,8 @@ def main() -> None:
             {
                 "mode": args.mode,
                 "n_cuts": int(len(df)),
-                "feature_dim": PAIR_FEATURE_DIM,
+                "feature_dim": int(expected_dim),
+                "include_hadamard": bool(args.include_hadamard),
                 "n_dropped_missing_embedding": n_drop,
                 "cut_index": str(args.cut_index),
                 "embeddings": str(args.embeddings),

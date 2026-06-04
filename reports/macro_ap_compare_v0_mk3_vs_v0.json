@@ -1,0 +1,15 @@
+{
+  "delta_mean": 0.033918159765982836,
+  "ci_low": 0.02591633473065638,
+  "ci_high": 0.042071096007658536,
+  "excludes_zero": true,
+  "macro_ap_a": 0.4054367778933475,
+  "macro_ap_b": 0.37151861812736464,
+  "n_resamples": 1000,
+  "n_movies": 64,
+  "a_path": "/mnt/disks/splice-data/outputs/v0_mk3/scores.npz",
+  "b_path": "/mnt/disks/splice-data/outputs/v0/scores.npz",
+  "score_key_a": "logistic__test_s",
+  "score_key_b": "logistic__test_s",
+  "n_test_cuts": 105095
+}

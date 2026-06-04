@@ -90,6 +90,8 @@ def main() -> None:
     ap.add_argument("--batch_size", type=int, default=1024)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--dropout", type=float, default=0.2)
+    ap.add_argument("--weight_decay", type=float, default=0.0,
+                    help="Adam weight decay (v1.5 uses 1e-4; default 0 preserves legacy behaviour)")
     ap.add_argument("--seed", type=int, default=231)
     ap.add_argument("--wandb_project", default="splice-v0")
     ap.add_argument("--wandb_mode", default="online", choices=["online", "offline", "disabled"])
@@ -129,7 +131,7 @@ def main() -> None:
         [float((y_tr == 0).sum()) / float(max((y_tr == 1).sum(), 1))], device=device
     )
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    optim = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.epochs)
     log.info("class-balancing pos_weight=%.2f", pos_weight.item())
 
