@@ -117,21 +117,33 @@ but is not directly comparable to published numbers. Macro AP recomputed by
 |---|--:|--:|--:|
 | v0 logistic | 0.356 | **0.372** | 64 |
 | v1.5 MLP (3-seed mean ± std) | 0.405 ± 0.002 | **0.418 ± 0.003** | 64 |
-| v2 LoRA r=8 α=16 | 0.452 | **0.468** | 64 |
+| **v2 LoRA r=8 α=16 (3-seed mean ± std)** | **0.4572 ± 0.0033** | **0.4690 ± 0.0020** | 64 |
 
-Macro is consistently ~+0.015 above pooled for every model; the metric choice
+Macro is consistently ~+0.012 above pooled for every model; the metric choice
 does not reorder them. Under movie-level paired bootstrap (1000 resamples) the
-v2 over v1.5 gap is **+0.048 macro AP, 95% CI [+0.037, +0.059]** (excludes 0,
-significant), the same magnitude as v1.5 over v0 (+0.048, CI [+0.038, +0.060]).
-On the comparable metric v2's 46.8 AP sits ~10.6 points below BaSSL (57.40),
+v2 over v1.5 gap is **+0.052 macro AP, 95% CI [+0.042, +0.063]** (excludes 0,
+significant; ensemble framing) — the same magnitude as v1.5 over v0 (+0.048).
+Per-seed mean macro AP for v2 is 0.4690 ± 0.0020 (3 seeds), vs v1.5's
+0.418 ± 0.003 — std on the macro AP statistic is tighter for v2 than for v1.5.
+On the comparable metric v2's 46.9 AP sits ~10.5 points below BaSSL (57.40),
 14 below TranS4mer, and 25-26 below NeighborNet / MASRC. The gap to SOTA is
 real but is not catastrophically larger than the pooled-AUPRC framing suggested
 — this is the basis on which v2 should be reported alongside published work.
 
 All v2 vs v1.5 (and v1.5 vs v0) statistical claims going forward use the
-movie-level paired bootstrap from `macro_ap.md`, not the pair-level resampling
-in `v1_significance.md` — pair-level resampling underestimates uncertainty when
-pairs from the same movie are correlated.
+movie-level paired bootstrap from `v2_final.md` / `macro_ap.md`, not the
+pair-level resampling in `v1_significance.md` — pair-level resampling
+underestimates uncertainty when pairs from the same movie are correlated.
+
+**Per-movie picture** (`reports/per_movie_analysis.md`,
+`reports/figures/per_movie_analysis.png`): v2 wins on **56 / 64 test movies
+(87.5%)**, with the biggest gains on movies where v1.5 was weakest (low
+positive rate, mediocre baseline AP). Largest single regression is −0.031 on a
+movie where v1.5 was already worse than v0. No catastrophic failures — v2's
+per-movie AP floor is 0.16 (above v1.5's 0.17). v2's mean gain is concentrated
+on hard movies rather than uniformly shifting easy ones, consistent with the
+LoRA backbone learning continuity-specific features the frozen DINOv2 + MLP
+couldn't access.
 
 ## 6. Stratified analysis
 

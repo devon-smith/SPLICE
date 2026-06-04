@@ -245,13 +245,24 @@ def _load_checkpoint(
     optim.load_state_dict(ckpt["optim_state"])
     sched.load_state_dict(ckpt["sched_state"])
     scaler.load_state_dict(ckpt["scaler_state"])
-    torch.set_rng_state(ckpt["torch_rng_state"].cpu())
-    if ckpt.get("cuda_rng_state_all") is not None and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(ckpt["cuda_rng_state_all"])
-    if ckpt.get("numpy_rng_state") is not None:
-        np.random.set_state(ckpt["numpy_rng_state"])
-    if ckpt.get("epoch_rng_state") is not None:
-        rng.bit_generator.state = ckpt["epoch_rng_state"]
+    # RNG state restore is best-effort: a CUDA driver/version change between
+    # save and load (e.g. a VM stop/restart) can leave the stored CUDA RNG
+    # tensors in a dtype torch.cuda.set_rng_state_all won't accept. Resuming
+    # with fresh RNG is correct training behaviour -- only exact step-by-step
+    # reproducibility is lost from this point onward.
+    for label, restore in [
+        ("torch_rng", lambda: torch.set_rng_state(ckpt["torch_rng_state"].cpu())),
+        ("cuda_rng", lambda: torch.cuda.set_rng_state_all(ckpt["cuda_rng_state_all"])
+            if ckpt.get("cuda_rng_state_all") is not None and torch.cuda.is_available() else None),
+        ("numpy_rng", lambda: np.random.set_state(ckpt["numpy_rng_state"])
+            if ckpt.get("numpy_rng_state") is not None else None),
+        ("epoch_rng", lambda: setattr(rng.bit_generator, "state", ckpt["epoch_rng_state"])
+            if ckpt.get("epoch_rng_state") is not None else None),
+    ]:
+        try:
+            restore()
+        except (TypeError, ValueError, RuntimeError) as e:
+            log.warning("could not restore %s state on resume (%s); continuing with fresh RNG", label, e)
     return (
         int(ckpt["epoch"]) + 1,
         float(ckpt["best_auprc"]),
