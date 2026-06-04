@@ -1,64 +1,50 @@
-"""Calibration: reliability diagrams + ECE + Brier for v0, v1.5, v2.
-
-All three heads were trained with class-weighted BCE (pos_weight ≈ 12) on a
-~7.5%-positive distribution, so the raw scores are *not* calibrated probabilities
-— they're upweighted to reach a usable F1. This script quantifies the gap (and
-how it shifts between models) on val and test.
-
-Outputs reliability diagrams + Brier/ECE per model + a markdown report.
-"""
+# reliability diagrams + ECE + Brier for v0, v1.5, v2
+# all three are trained with class-weighted BCE (pos_weight ~= 12) so the raw
+# sigmoid outputs are not calibrated probabilities; this quantifies the gap.
+# usage: python scripts/eval/v2_calibration.py
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.calibration import calibration_curve
 
-REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
-
-DEFAULT_V0 = "/mnt/disks/splice-data/outputs/v0/scores.npz"
-DEFAULT_V15 = "/mnt/disks/splice-data/outputs/v1_sound/scores.npz"
-DEFAULT_V2 = "/mnt/disks/splice-data/outputs/v2_lora_extended/seed0/r8_a16/scores.npz"
+V0_NPZ = "/mnt/disks/splice-data/outputs/v0/scores.npz"
+V15_NPZ = "/mnt/disks/splice-data/outputs/v1_sound/scores.npz"
+V2_NPZ = "/mnt/disks/splice-data/outputs/v2_lora_extended/seed0/r8_a16/scores.npz"
+N_BINS = 15
 
 
-def ece(y: np.ndarray, p: np.ndarray, n_bins: int = 15) -> float:
+# expected calibration error: weighted L1 between predicted prob and observed rate per bin
+def ece(y, p, n_bins=N_BINS):
     bins = np.linspace(0, 1, n_bins + 1)
-    idx = np.digitize(p, bins, right=False) - 1
-    idx = np.clip(idx, 0, n_bins - 1)
-    total = 0.0
+    idx = np.clip(np.digitize(p, bins, right=False) - 1, 0, n_bins - 1)
     n = len(p)
+    total = 0.0
     for b in range(n_bins):
         sel = idx == b
         if not sel.any():
             continue
-        conf = p[sel].mean()
-        acc = y[sel].mean()
-        total += (sel.sum() / n) * abs(conf - acc)
+        total += (sel.sum() / n) * abs(p[sel].mean() - y[sel].mean())
     return float(total)
 
 
-def brier(y: np.ndarray, p: np.ndarray) -> float:
+def brier(y, p):
     return float(((p - y) ** 2).mean())
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--v0_scores", default=DEFAULT_V0)
-    ap.add_argument("--v1_5_scores", default=DEFAULT_V15)
-    ap.add_argument("--v2_scores", default=DEFAULT_V2)
-    ap.add_argument("--out_fig", default=str(REPO / "reports/figures/calibration_v0_v15_v2.png"))
-    ap.add_argument("--out_json", default=str(REPO / "reports/v2_calibration_metrics.json"))
-    ap.add_argument("--n_bins", type=int, default=15)
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--v0_scores", default=V0_NPZ)
+    ap.add_argument("--v1_5_scores", default=V15_NPZ)
+    ap.add_argument("--v2_scores", default=V2_NPZ)
+    ap.add_argument("--out_fig", default="reports/figures/calibration_v0_v15_v2.png")
+    ap.add_argument("--out_json", default="reports/v2_calibration_metrics.json")
     args = ap.parse_args()
 
-    v0 = np.load(args.v0_scores)
-    v15 = np.load(args.v1_5_scores)
-    v2 = np.load(args.v2_scores)
-
+    v0, v15, v2 = np.load(args.v0_scores), np.load(args.v1_5_scores), np.load(args.v2_scores)
     models = {
         "v0 logistic": {
             "val_s": v0["logistic__val_s"].astype(float),
@@ -80,15 +66,15 @@ def main() -> None:
         },
     }
 
-    results: dict[str, dict] = {}
+    results = {}
     for name, d in models.items():
         results[name] = {
             "val_brier": brier(d["val_y"], d["val_s"]),
-            "val_ece": ece(d["val_y"], d["val_s"], args.n_bins),
+            "val_ece": ece(d["val_y"], d["val_s"]),
             "val_mean_pred": float(d["val_s"].mean()),
             "val_pos_rate": float(d["val_y"].mean()),
             "test_brier": brier(d["test_y"], d["test_s"]),
-            "test_ece": ece(d["test_y"], d["test_s"], args.n_bins),
+            "test_ece": ece(d["test_y"], d["test_s"]),
             "test_mean_pred": float(d["test_s"].mean()),
             "test_pos_rate": float(d["test_y"].mean()),
         }
@@ -107,14 +93,13 @@ def main() -> None:
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
     for ax, split in zip(axes, ("val", "test")):
         for name, d in models.items():
-            y = d[f"{split}_y"]
-            s = d[f"{split}_s"]
-            prob_true, prob_pred = calibration_curve(y, s, n_bins=args.n_bins, strategy="uniform")
+            prob_true, prob_pred = calibration_curve(d[f"{split}_y"], d[f"{split}_s"],
+                                                     n_bins=N_BINS, strategy="uniform")
             ax.plot(prob_pred, prob_true, marker="o", markersize=4, label=name, linewidth=1.5)
         ax.plot([0, 1], [0, 1], "k:", alpha=0.5, label="perfectly calibrated")
         ax.set_xlabel("mean predicted probability (bin)")
         ax.set_ylabel("observed positive rate (bin)")
-        ax.set_title(f"Reliability diagram — {split}")
+        ax.set_title(f"Reliability diagram -- {split}")
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.legend(fontsize=9, loc="upper left")

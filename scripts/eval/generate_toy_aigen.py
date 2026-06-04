@@ -1,29 +1,19 @@
-"""Block 3d: generate a synthetic 8-pair toy AI-gen dataset.
-
-Exercises the full AI-gen harness end-to-end before real clips arrive. Each pair
-is two short clips; "consistent" pairs share a background colour across the cut,
-"inconsistent" pairs switch colour -- enough structure for the pipeline to run
-and produce non-trivial scores (the numbers themselves are meaningless).
-
-Writes /mnt/disks/splice-data/datasets/aigen_toy/ with per-source clip folders
-and labels.csv.
-"""
+# synthetic 8-pair toy AI-gen dataset to exercise the harness end-to-end
+# each pair = 2 short 256x256 clips with a moving square on a colour bg;
+# y=0 keeps the bg across the cut, y=1 switches it
+# usage: python scripts/eval/generate_toy_aigen.py
 
 import csv
-import logging
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("generate_toy_aigen")
-
 OUT = Path("/mnt/disks/splice-data/datasets/aigen_toy")
 FPS, N_FRAMES, SIZE = 24, 48, 256  # 2-second 256x256 clips
-SQUARE = (0, 255, 255)  # BGR -- a fixed moving foreground element
+SQUARE = (0, 255, 255)  # BGR, fixed moving foreground
 
-# (pair_id, source, y_inconsistent, left_bg, right_bg). y=0 -> same bg across cut.
+# (pair_id, source, y_inconsistent, left_bg, right_bg)
 SPECS = [
     ("001", "toy_a", 0, (40, 120, 200), (40, 120, 200)),
     ("002", "toy_a", 0, (200, 80, 40), (200, 80, 40)),
@@ -36,7 +26,7 @@ SPECS = [
 ]
 
 
-def write_clip(path: Path, bg: tuple[int, int, int], start_x: int) -> None:
+def write_clip(path, bg, start_x):
     writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), FPS, (SIZE, SIZE))
     for i in range(N_FRAMES):
         frame = np.full((SIZE, SIZE, 3), bg, dtype=np.uint8)
@@ -46,28 +36,24 @@ def write_clip(path: Path, bg: tuple[int, int, int], start_x: int) -> None:
     writer.release()
 
 
-def main() -> None:
+def main():
     rows = []
     for pid, source, y, left_bg, right_bg in SPECS:
         clip_dir = OUT / source
         clip_dir.mkdir(parents=True, exist_ok=True)
-        # right clip's motion continues from where the left clip ended
+        # right clip motion continues from where the left ended
         write_clip(clip_dir / f"pair_{pid}_left.mp4", left_bg, start_x=10)
         write_clip(clip_dir / f"pair_{pid}_right.mp4", right_bg, start_x=10 + N_FRAMES * 3)
-        rows.append(
-            {
-                "pair_id": pid,
-                "source": source,
-                "y_inconsistent": y,
-                "notes": "consistent (same colour)" if y == 0 else "inconsistent (colour switch)",
-            }
-        )
+        rows.append({
+            "pair_id": pid, "source": source, "y_inconsistent": y,
+            "notes": "consistent (same colour)" if y == 0 else "inconsistent (colour switch)",
+        })
 
     with open(OUT / "labels.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=["pair_id", "source", "y_inconsistent", "notes"])
         w.writeheader()
         w.writerows(rows)
-    log.info("wrote %d toy pairs (16 clips) + labels.csv to %s", len(rows), OUT)
+    print(f"wrote {len(rows)} toy pairs (16 clips) + labels.csv to {OUT}")
 
 
 if __name__ == "__main__":

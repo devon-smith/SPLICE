@@ -1,25 +1,13 @@
-"""Evaluation metrics for cut-continuity scoring.
-
-The task is class-imbalanced (~6.5% positive), so AUPRC is the headline metric;
-AUROC is reported alongside. ``threshold_metrics`` evaluates a hard decision at a
-given operating point (F1-optimal on val, or the tau_95 calibration threshold).
-"""
+# evaluation metrics for cut-continuity scoring
+# task is class-imbalanced (~7.5% positive), so AUPRC is the headline; AUROC alongside
 
 import numpy as np
-from sklearn.metrics import (
-    accuracy_score,
-    average_precision_score,
-    confusion_matrix,
-    f1_score,
-    precision_recall_curve,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
+from sklearn.metrics import (accuracy_score, average_precision_score, confusion_matrix,
+                              f1_score, precision_recall_curve, precision_score,
+                              recall_score, roc_auc_score)
 
 
-def ranking_metrics(y_true: np.ndarray, scores: np.ndarray) -> dict:
-    """Threshold-free metrics: AUROC and AUPRC."""
+def ranking_metrics(y_true, scores):
     y_true = np.asarray(y_true).astype(int)
     scores = np.asarray(scores, dtype=float)
     return {
@@ -30,8 +18,8 @@ def ranking_metrics(y_true: np.ndarray, scores: np.ndarray) -> dict:
     }
 
 
-def threshold_metrics(y_true: np.ndarray, scores: np.ndarray, threshold: float) -> dict:
-    """Hard-decision metrics at a fixed threshold (``score >= threshold`` -> positive)."""
+# hard-decision metrics at a fixed threshold (score >= thr -> positive)
+def threshold_metrics(y_true, scores, threshold):
     y_true = np.asarray(y_true).astype(int)
     y_pred = (np.asarray(scores, dtype=float) >= threshold).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
@@ -41,15 +29,12 @@ def threshold_metrics(y_true: np.ndarray, scores: np.ndarray, threshold: float) 
         "precision": float(precision_score(y_true, y_pred, zero_division=0)),
         "recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "tp": int(tp),
-        "fp": int(fp),
-        "fn": int(fn),
-        "tn": int(tn),
+        "tp": int(tp), "fp": int(fp), "fn": int(fn), "tn": int(tn),
     }
 
 
-def best_f1_threshold(y_true: np.ndarray, scores: np.ndarray) -> float:
-    """Threshold maximising F1, swept over the precision-recall curve."""
+# threshold that maximises F1, swept over the precision-recall curve
+def best_f1_threshold(y_true, scores):
     y_true = np.asarray(y_true).astype(int)
     scores = np.asarray(scores, dtype=float)
     prec, rec, thr = precision_recall_curve(y_true, scores)
@@ -59,6 +44,5 @@ def best_f1_threshold(y_true: np.ndarray, scores: np.ndarray) -> float:
     return float(thr[int(np.argmax(f1))])
 
 
-def evaluate(y_true: np.ndarray, scores: np.ndarray, threshold: float) -> dict:
-    """Convenience: ranking metrics + threshold metrics at one operating point."""
+def evaluate(y_true, scores, threshold):
     return {**ranking_metrics(y_true, scores), **threshold_metrics(y_true, scores, threshold)}

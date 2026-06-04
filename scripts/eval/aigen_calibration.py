@@ -1,92 +1,56 @@
-"""Action 1: AI-gen calibration -- domain-specific score percentiles.
-
-The MovieNet operating thresholds do not transfer to AI-gen footage (the Veo
-distribution sits an order of magnitude below them; see v1_distribution_shift).
-This computes percentile tables for all six scorers on three populations:
-
-  veo_continuous_action     the 10 Veo y=0 pilot pairs (the AI-gen baseline)
-  movienet_within_scene     MovieNet test cuts, y=0 (reference)
-  movienet_scene_boundary   MovieNet test cuts, y=1 (reference)
-
-Writes configs/aigen_calibration.json and reports/aigen_calibration.md.
-Reads cached scores only.
-
-  python scripts/eval/aigen_calibration.py
-"""
+# AI-gen calibration: domain-specific score percentiles for all 6 scorers
+# MovieNet thresholds don't transfer to AI-gen, so we compute a Veo-baseline
+# percentile table that downstream flagging uses.
+# usage: python scripts/eval/aigen_calibration.py
 
 import argparse
 import json
-import logging
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from scipy.stats import percentileofscore
 
-HERE = Path(__file__).resolve()
-REPO = HERE.parents[2]
-sys.path.insert(0, str(REPO))
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("aigen_calibration")
-
+REPO = Path(__file__).resolve().parents[2]
 V0_NPZ = "/mnt/disks/splice-data/outputs/v0/scores.npz"
 V1_NPZ = "/mnt/disks/splice-data/outputs/v1_sound/scores.npz"
 MP_NPZ = "/mnt/disks/splice-data/outputs/v0_mean_pool/scores.npz"
 PER_PAIR_CSV = "/mnt/disks/splice-data/outputs/aigen_eval/results/per_pair_scores.csv"
 CALIB_JSON = REPO / "configs" / "aigen_calibration.json"
-REPORT = REPO / "reports" / "aigen_calibration.md"
 
 PERCENTILES = [50, 75, 90, 95, 99]
-# canonical model name -> per_pair_scores.csv column
 MODELS = ["v1.5", "v0_logistic", "mean_pool_3", "raw_dino_cosine", "hsv_chisq", "clip_cosine"]
 VEO_COL = {
-    "v1.5": "v1.5_MLP",
-    "v0_logistic": "v0_logistic",
-    "mean_pool_3": "mean_pool_3",
-    "raw_dino_cosine": "raw_cos",
-    "hsv_chisq": "hsv_chisq",
-    "clip_cosine": "clip_cos",
+    "v1.5": "v1.5_MLP", "v0_logistic": "v0_logistic", "mean_pool_3": "mean_pool_3",
+    "raw_dino_cosine": "raw_cos", "hsv_chisq": "hsv_chisq", "clip_cosine": "clip_cos",
 }
 MAJOR = ["A005", "A015"]  # Dispatch's "major identity failure" pairs
-CLEAN = ["A003", "A013"]  # Dispatch's "clean continuity" pairs
 
 
-def load_movienet() -> dict:
-    """{model: (test scores, test labels)} for all six scorers."""
-    v0, v1, mp = np.load(V0_NPZ), np.load(V1_NPZ), np.load(MP_NPZ)
-    return {
-        "v1.5": (v1["test_s"].astype(float), v1["test_y"].astype(int)),
-        "v0_logistic": (
-            v0["logistic__test_s"].astype(float),
-            v0["logistic__test_y"].astype(int),
-        ),
-        "mean_pool_3": (
-            mp["logistic__test_s"].astype(float),
-            mp["logistic__test_y"].astype(int),
-        ),
-        "raw_dino_cosine": (
-            v0["raw_dino_cosine__test_s"].astype(float),
-            v0["raw_dino_cosine__test_y"].astype(int),
-        ),
-        "hsv_chisq": (
-            v0["hsv_chisq__test_s"].astype(float),
-            v0["hsv_chisq__test_y"].astype(int),
-        ),
-        "clip_cosine": (
-            v0["clip_cosine__test_s"].astype(float),
-            v0["clip_cosine__test_y"].astype(int),
-        ),
-    }
-
-
-def pctiles(arr: np.ndarray) -> dict:
+def pctiles(arr):
     return {f"p{p}": float(np.percentile(arr, p)) for p in PERCENTILES}
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
+# {model: (test scores, test labels)} for all 6 scorers
+def load_movienet():
+    v0, v1, mp = np.load(V0_NPZ), np.load(V1_NPZ), np.load(MP_NPZ)
+    return {
+        "v1.5": (v1["test_s"].astype(float), v1["test_y"].astype(int)),
+        "v0_logistic": (v0["logistic__test_s"].astype(float),
+                        v0["logistic__test_y"].astype(int)),
+        "mean_pool_3": (mp["logistic__test_s"].astype(float),
+                        mp["logistic__test_y"].astype(int)),
+        "raw_dino_cosine": (v0["raw_dino_cosine__test_s"].astype(float),
+                            v0["raw_dino_cosine__test_y"].astype(int)),
+        "hsv_chisq": (v0["hsv_chisq__test_s"].astype(float),
+                      v0["hsv_chisq__test_y"].astype(int)),
+        "clip_cosine": (v0["clip_cosine__test_s"].astype(float),
+                        v0["clip_cosine__test_y"].astype(int)),
+    }
+
+
+def main():
+    ap = argparse.ArgumentParser()
     ap.add_argument("--per_pair_csv", default=PER_PAIR_CSV)
     args = ap.parse_args()
 
@@ -97,156 +61,35 @@ def main() -> None:
     calib = {
         "_comment": (
             "AI-gen score-calibration percentiles. veo_continuous_action is the "
-            "10-pair Veo y=0 pilot (n=10 -- provisional, high percentiles flag "
-            "only the top 1-2 pairs). movienet_* are the MovieNet test split. A "
-            "Veo score above its veo_continuous_action p90/p95 is unusual "
-            "relative to other Veo continuous-action pairs. Generated by "
-            "scripts/eval/aigen_calibration.py."
+            "10-pair Veo y=0 pilot. A Veo score above its p90/p95 is unusual "
+            "relative to other Veo continuous-action pairs."
         ),
         "percentiles": PERCENTILES,
         "veo_continuous_action": {m: pctiles(veo[m]) for m in MODELS},
         "movienet_within_scene": {m: pctiles(s[y == 0]) for m, (s, y) in mn.items()},
         "movienet_scene_boundary": {m: pctiles(s[y == 1]) for m, (s, y) in mn.items()},
     }
+    CALIB_JSON.parent.mkdir(parents=True, exist_ok=True)
     CALIB_JSON.write_text(json.dumps(calib, indent=2))
-    log.info("wrote %s", CALIB_JSON)
+    print(f"wrote {CALIB_JSON}")
 
-    _write_report(REPORT, calib, pp, veo)
-    _print_console(calib, pp, veo)
-    log.info("wrote %s", REPORT)
-
-
-def _pctile_table(block: dict) -> list[str]:
-    rows = ["| model | p50 | p75 | p90 | p95 | p99 |", "|---|--:|--:|--:|--:|--:|"]
-    for m in MODELS:
-        d = block[m]
-        rows.append(
-            f"| {m} | {d['p50']:.3f} | {d['p75']:.3f} | {d['p90']:.3f} "
-            f"| {d['p95']:.3f} | {d['p99']:.3f} |"
-        )
-    return rows
-
-
-def _landing(pp: pd.DataFrame, veo: dict, pid: str) -> dict:
-    """Per-model: the pair's score and its percentile rank within the 10 Veo pairs."""
-    row = pp[pp["pair_id"] == pid].iloc[0]
-    out = {}
-    for m in MODELS:
-        s = float(row[VEO_COL[m]])
-        out[m] = (s, float(percentileofscore(veo[m], s, kind="mean")))
-    return out
-
-
-def _print_console(calib: dict, pp: pd.DataFrame, veo: dict) -> None:
-    print("\n=== Veo y=0 baseline percentiles ===")
-    for line in _pctile_table(calib["veo_continuous_action"]):
-        print("  " + line)
-    print("\n=== Where the major-identity pairs land (Veo percentile rank) ===")
-    for pid in MAJOR:
-        land = _landing(pp, veo, pid)
-        bits = "  ".join(f"{m.split('_')[0]}:{land[m][1]:.0f}" for m in MODELS)
-        print(f"  {pid}:  {bits}")
-
-
-def _write_report(path: Path, calib: dict, pp: pd.DataFrame, veo: dict) -> None:
-    md = [
-        "# AI-Gen Calibration\n",
-        "MovieNet operating thresholds do not transfer to AI-gen footage. This "
-        "gives domain-specific percentile tables for all six scorers, so a Veo "
-        "score can be judged against *other Veo continuous-action pairs* rather "
-        "than against MovieNet. **The Veo side is n=10, single-class, one "
-        "generator — these baselines are provisional.** Source: "
-        "`configs/aigen_calibration.json`.\n",
-        "## Veo continuous-action baseline (n=10, all y=0)\n",
-        "The score above which a Veo continuous-action pair is unusual *relative "
-        "to other Veo continuous-action pairs*.\n",
-        *_pctile_table(calib["veo_continuous_action"]),
-        "\n## MovieNet within-scene (y=0) — reference\n",
-        *_pctile_table(calib["movienet_within_scene"]),
-        "\n## MovieNet scene-boundary (y=1) — reference\n",
-        *_pctile_table(calib["movienet_scene_boundary"]),
-        "\n## Where do the major-identity pairs land?\n",
-        "Dispatch flagged A005 and A015 as major identity failures. Per model: "
-        "the pair's score and its percentile rank *within the 10 Veo pairs*.\n",
-        "| model | A005 score | A005 Veo-%ile | A015 score | A015 Veo-%ile |",
-        "|---|--:|--:|--:|--:|",
-    ]
-    land = {pid: _landing(pp, veo, pid) for pid in MAJOR}
-    for m in MODELS:
-        a5, a5p = land["A005"][m]
-        a15, a15p = land["A015"][m]
-        md.append(f"| {m} | {a5:.3f} | {a5p:.0f} | {a15:.3f} | {a15p:.0f} |")
-    md.append("\n" + _interpretation(calib, pp, veo, land))
-    path.write_text("\n".join(md))
-
-
-def _interpretation(calib: dict, pp: pd.DataFrame, veo: dict, land: dict) -> str:
+    # console: Veo p50/p90/p95 + where the major-identity pairs land
     vc = calib["veo_continuous_action"]
-    # which models put BOTH major pairs at or above their Veo p90?
-    both_p90 = [
-        m
-        for m in MODELS
-        if land["A005"][m][0] >= vc[m]["p90"] and land["A015"][m][0] >= vc[m]["p90"]
-    ]
-    # clean pairs that would (wrongly) be flagged at Veo p90
-    clean_scores = {m: pp.set_index("pair_id").loc[CLEAN, VEO_COL[m]].to_numpy() for m in MODELS}
-    clean_clear = [m for m in MODELS if (clean_scores[m] < vc[m]["p90"]).all()]
-    best = [m for m in both_p90 if m in clean_clear]
+    print("\nVeo y=0 percentiles:")
+    print(f"  {'model':18s}  {'p50':>7s}  {'p75':>7s}  {'p90':>7s}  {'p95':>7s}")
+    for m in MODELS:
+        d = vc[m]
+        print(f"  {m:18s}  {d['p50']:.4f}  {d['p75']:.4f}  {d['p90']:.4f}  {d['p95']:.4f}")
 
-    p1 = (
-        "## Interpretation\n\n"
-        f"With n=10 the Veo percentiles are coarse — p90 is effectively the 9th "
-        f"of 10 scores, p99 the near-maximum — so a 'flag above Veo p90' rule "
-        f"can only ever fire on the top one or two pairs. Within that limit: "
-        f"A005 is extreme for v1.5 (score {land['A005']['v1.5'][0]:.3f}, "
-        f"{land['A005']['v1.5'][1]:.0f}th Veo percentile) and for CLIP cosine "
-        f"({land['A005']['clip_cosine'][1]:.0f}th), but only mid-pack for v0 "
-        f"logistic ({land['A005']['v0_logistic'][1]:.0f}th). A015 is the mirror "
-        f"image: top of the Veo range for v0 logistic "
-        f"({land['A015']['v0_logistic'][1]:.0f}th) and high for CLIP "
-        f"({land['A015']['clip_cosine'][1]:.0f}th), but only "
-        f"{land['A015']['v1.5'][1]:.0f}th for v1.5 — v1.5 reads A015 as an "
-        f"ordinary Veo pair."
-    )
-    if best:
-        rec = (
-            f"Models whose Veo-p90 threshold flags *both* major pairs without "
-            f"flagging either clean pair: **{', '.join(best)}**. CLIP cosine is "
-            f"the single scorer that ranks both A005 and A015 highest in the Veo "
-            f"distribution — consistent with Experiment 1."
-        )
-    elif both_p90:
-        rec = (
-            f"Models whose Veo-p90 threshold reaches both major pairs: "
-            f"{', '.join(both_p90)} — but check the clean pairs are not also "
-            f"caught."
-        )
-    else:
-        rec = (
-            "No single model's Veo-p90 threshold flags both A005 and A015 — v1.5 "
-            "catches A005, v0 catches A015, CLIP comes closest to both. A "
-            "combination is needed."
-        )
-    p2 = (
-        "## Recommended thresholds for AI-gen flagging\n\n"
-        + rec
-        + " For deployment, two regimes:\n\n"
-        f"- **Same-domain (relative) flag:** flag a Veo continuous-action pair "
-        f"if its score exceeds the `veo_continuous_action` **p90** for the chosen "
-        f"model (v1.5 p90 = {vc['v1.5']['p90']:.3f}, CLIP p90 = "
-        f"{vc['clip_cosine']['p90']:.3f}, v0 p90 = {vc['v0_logistic']['p90']:.3f}). "
-        f"This is provisional at n=10 and should be refit once more Veo pairs "
-        f"exist.\n"
-        f"- **Cross-domain (rank) flag:** rank each Veo pair against the 98k "
-        f"MovieNet within-scene cuts — a far more stable reference than 10 "
-        f"pilot pairs. This is Action 2; it is the more reliable flag until the "
-        f"Veo baseline has a real sample size.\n\n"
-        "Bottom line: the MovieNet thresholds (val ~0.75, τ99 ~0.65) must not be "
-        "used on AI-gen footage; use the `veo_continuous_action` percentiles "
-        "here for same-domain flagging, and prefer the rank-based flag for "
-        "anything deployed."
-    )
-    return p1 + "\n\n" + p2
+    print("\nWhere the major-identity pairs land (Veo percentile rank):")
+    for pid in MAJOR:
+        row = pp[pp["pair_id"] == pid].iloc[0]
+        bits = []
+        for m in MODELS:
+            s = float(row[VEO_COL[m]])
+            rank = float(percentileofscore(veo[m], s, kind="mean"))
+            bits.append(f"{m.split('_')[0]}:{rank:.0f}")
+        print(f"  {pid}:  " + "  ".join(bits))
 
 
 if __name__ == "__main__":

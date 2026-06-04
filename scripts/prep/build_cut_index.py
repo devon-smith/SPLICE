@@ -1,71 +1,52 @@
-"""Build the labeled cut index: one row per adjacent shot-pair cut in MovieNet.
+# build the labeled cut index: one row per adjacent shot-pair cut in MovieNet
+# writes a single Parquet with the 13-col schema; every downstream stage reads it
+# usage: python scripts/prep/build_cut_index.py
 
-Output is a single Parquet file with the 13-column schema in
-``src.data.movienet.CUT_INDEX_COLUMNS``. Every downstream stage (embedding,
-pair features, training, calibration) reads this file.
-
-Example:
-  python scripts/prep/build_cut_index.py \\
-      --data_root /mnt/disks/splice-data/datasets/movienet \\
-      --out /mnt/disks/splice-data/outputs/cut_index/cuts.parquet
-"""
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import argparse
-import logging
-import sys
+import json
 from pathlib import Path
 
 import pandas as pd
 from tqdm import tqdm
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from src.data.movienet import (  # noqa: E402
-    CUT_INDEX_COLUMNS,
-    cut_rows_for_movie,
-    load_shots_by_movie,
-)
+from src.data.movienet import CUT_INDEX_COLUMNS, cut_rows_for_movie, load_shots_by_movie
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("build_cut_index")
-
-DEFAULT_DATA_ROOT = "/mnt/disks/splice-data/datasets/movienet"
-DEFAULT_OUT = "/mnt/disks/splice-data/outputs/cut_index/cuts.parquet"
+DATA_ROOT = "/mnt/disks/splice-data/datasets/movienet"
+OUT_PATH = "/mnt/disks/splice-data/outputs/cut_index/cuts.parquet"
 
 
-def load_split_override(split_file: Path) -> dict[str, str]:
-    """Load a split318-style JSON ({split: [movie_id, ...]}) into {movie_id: split}."""
-    import json
-
-    raw = json.loads(split_file.read_text())
-    return {mid: split for split, ids in raw.items() for mid in ids}
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--data_root", default=DEFAULT_DATA_ROOT)
-    ap.add_argument("--anno_dir", default=None, help="default: <data_root>/anno")
-    ap.add_argument("--frames_dir", default=None, help="default: <data_root>/240P_frames")
-    ap.add_argument("--out", default=DEFAULT_OUT)
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data_root", default=DATA_ROOT)
+    ap.add_argument("--out", default=OUT_PATH)
     ap.add_argument("--label_source", choices=["auto", "label318", "json"], default="auto")
     ap.add_argument("--split_file", default=None, help="optional split318.json override")
     args = ap.parse_args()
 
     data_root = Path(args.data_root)
-    anno_dir = Path(args.anno_dir) if args.anno_dir else data_root / "anno"
-    frames_dir = Path(args.frames_dir) if args.frames_dir else data_root / "240P_frames"
+    anno_dir = data_root / "anno"
+    frames_dir = data_root / "240P_frames"
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    log.info("parsing annotations from %s", anno_dir)
+    print(f"parsing annotations from {anno_dir}")
     by_movie = load_shots_by_movie(anno_dir)
-    log.info("found %d movies", len(by_movie))
+    print(f"found {len(by_movie)} movies")
     if not by_movie:
         raise SystemExit(f"no annotations found under {anno_dir}")
 
-    split_override = load_split_override(Path(args.split_file)) if args.split_file else {}
+    # optional override: split318.json maps {split: [movie_id, ...]}
+    split_override = {}
+    if args.split_file:
+        raw = json.loads(Path(args.split_file).read_text())
+        split_override = {mid: split for split, ids in raw.items() for mid in ids}
 
-    rows: list[dict] = []
-    failed: list[str] = []
+    rows = []
+    failed = []
     n_dropped = 0  # cuts dropped because boundary_label == -1 (BaSSL "ignore" marker)
     for movie_id, (split, shots) in tqdm(sorted(by_movie.items()), desc="movies"):
         try:
@@ -73,8 +54,8 @@ def main() -> None:
             movie_rows = cut_rows_for_movie(movie_id, split, shots, frames_dir, args.label_source)
             n_dropped += max(len(shots) - 1, 0) - len(movie_rows)
             rows.extend(movie_rows)
-        except Exception as exc:  # noqa: BLE001 - keep one bad movie from killing the run
-            log.warning("failed to parse %s: %s", movie_id, exc)
+        except Exception as exc:
+            print(f"failed to parse {movie_id}: {exc}")
             failed.append(movie_id)
 
     df = pd.DataFrame(rows, columns=CUT_INDEX_COLUMNS)
@@ -83,13 +64,13 @@ def main() -> None:
     if failed:
         fail_path = out_path.parent / "failed_movies.txt"
         fail_path.write_text("\n".join(failed) + "\n")
-        log.warning("%d movies failed -> %s", len(failed), fail_path)
+        print(f"{len(failed)} movies failed -> {fail_path}")
 
     pos = int(df["y_inconsistent"].sum())
-    log.info("wrote %d cuts to %s", len(df), out_path)
-    log.info("positive (scene-boundary) cuts: %d (%.2f%%)", pos, 100 * pos / max(len(df), 1))
-    log.info("splits: %s", df.groupby("split").size().to_dict())
-    log.info("dropped %d unlabeled cuts (boundary_label == -1)", n_dropped)
+    print(f"wrote {len(df)} cuts to {out_path}")
+    print(f"positive (scene-boundary) cuts: {pos} ({100 * pos / max(len(df), 1):.2f}%)")
+    print(f"splits: {df.groupby('split').size().to_dict()}")
+    print(f"dropped {n_dropped} unlabeled cuts (boundary_label == -1)")
 
 
 if __name__ == "__main__":

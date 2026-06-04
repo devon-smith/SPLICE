@@ -1,16 +1,8 @@
-"""Per-movie test-set diagnostic: where does v2 help, where does it not?
-
-Joins per-movie macro AP from the three trained heads (v0, v1.5, v2) on the 64
-MovieNet test movies. v1.5 = mean of 3 seeds. v2 = seed-0 proxy (until Phase 2
-completes; re-run with 3-seed mean afterward by swapping --v2_scores).
-
-Writes a CSV + a bar-chart figure and prints headline ranks (best/worst movies
-for v2 vs v1.5). Reads cached score files only; trains nothing.
-"""
+# per-movie test diagnostic: where does v2 help over v1.5, where does it not?
+# v1.5 = per-seed-mean macro AP (matches the headline 0.418); v2 = seed-0 proxy
+# usage: python scripts/eval/per_movie_analysis.py
 
 import argparse
-import json
-import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -18,69 +10,65 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score
 
-REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
+V0_NPZ = "/mnt/disks/splice-data/outputs/v0/scores.npz"
+V0_KEY = "logistic__test_s"
+V15_NPZ = "/mnt/disks/splice-data/outputs/v1_sound/scores.npz"
+V2_NPZ = "/mnt/disks/splice-data/outputs/v2_lora_extended/seed0/r8_a16/scores.npz"
+CUT_INDEX = "/mnt/disks/splice-data/outputs/cut_index/cuts.parquet"
+OUT_CSV = "reports/per_movie_analysis.csv"
+OUT_FIG = "reports/per_movie_analysis.png"
 
 
-def per_movie_ap(scores: np.ndarray, labels: np.ndarray, movie_ids: np.ndarray,
-                  min_cuts: int = 5) -> dict[str, float]:
+def per_movie_ap(scores, labels, movie_ids, min_cuts=5):
     out = {}
     for mid in np.unique(movie_ids):
-        idx = movie_ids == mid
-        if idx.sum() < min_cuts:
+        m = movie_ids == mid
+        if m.sum() < min_cuts:
             continue
-        pos = labels[idx].sum()
-        if pos == 0 or pos == idx.sum():
+        y = labels[m]
+        if y.sum() == 0 or y.sum() == m.sum():
             continue
-        out[str(mid)] = float(average_precision_score(labels[idx], scores[idx]))
+        out[str(mid)] = float(average_precision_score(y, scores[m]))
     return out
 
 
-def load_test_movie_ids(cut_index: str, n: int) -> np.ndarray:
-    df = pd.read_parquet(cut_index, columns=["split", "movie_id"])
-    test = df[df["split"] == "test"].reset_index(drop=True)
-    assert len(test) == n, f"len(test)={len(test)} vs n_scores={n}"
-    return test["movie_id"].to_numpy()
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--v0_scores", default="/mnt/disks/splice-data/outputs/v0/scores.npz")
-    ap.add_argument("--v0_key", default="logistic__test_s")
-    ap.add_argument("--v1_5_scores", default="/mnt/disks/splice-data/outputs/v1_sound/scores.npz")
-    ap.add_argument("--v2_scores",
-                    default="/mnt/disks/splice-data/outputs/v2_lora_extended/seed0/r8_a16/scores.npz")
-    ap.add_argument("--cut_index", default="/mnt/disks/splice-data/outputs/cut_index/cuts.parquet")
-    ap.add_argument("--out_csv", default=str(REPO / "reports/per_movie_analysis.csv"))
-    ap.add_argument("--out_fig", default=str(REPO / "reports/per_movie_analysis.png"))
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--v0_scores", default=V0_NPZ)
+    ap.add_argument("--v0_key", default=V0_KEY)
+    ap.add_argument("--v1_5_scores", default=V15_NPZ)
+    ap.add_argument("--v2_scores", default=V2_NPZ)
+    ap.add_argument("--cut_index", default=CUT_INDEX)
+    ap.add_argument("--out_csv", default=OUT_CSV)
+    ap.add_argument("--out_fig", default=OUT_FIG)
     args = ap.parse_args()
 
-    v0_npz = np.load(args.v0_scores)
-    v0_s = v0_npz[args.v0_key].astype(float)
-    v0_y_key = args.v0_key.replace("__test_s", "__test_y")
-    y = v0_npz[v0_y_key].astype(int)
-    n = len(y)
-    movie_ids = load_test_movie_ids(args.cut_index, n)
+    v0 = np.load(args.v0_scores)
+    v0_s = v0[args.v0_key].astype(float)
+    y = v0[args.v0_key.replace("__test_s", "__test_y")].astype(int)
 
-    v15_npz = np.load(args.v1_5_scores)
-    v15_seeds = {s: v15_npz[f"seed{s}_test_s"].astype(float) for s in range(3)}
-    assert np.array_equal(y, v15_npz["test_y"].astype(int)), "v0/v1.5 label mismatch"
+    cuts = pd.read_parquet(args.cut_index, columns=["split", "movie_id", "y_inconsistent"])
+    test = cuts[cuts["split"] == "test"].reset_index(drop=True)
+    assert len(test) == len(y)
+    movie_ids = test["movie_id"].to_numpy()
 
-    v2_npz = np.load(args.v2_scores)
-    v2_s = v2_npz["test_s"].astype(float)
-    assert np.array_equal(y, v2_npz["test_y"].astype(int)), "v0/v2 label mismatch"
+    v15 = np.load(args.v1_5_scores)
+    v15_seeds = {s: v15[f"seed{s}_test_s"].astype(float) for s in range(3)}
+    assert np.array_equal(y, v15["test_y"].astype(int))
+
+    v2 = np.load(args.v2_scores)
+    v2_s = v2["test_s"].astype(float)
+    assert np.array_equal(y, v2["test_y"].astype(int))
 
     ap0 = per_movie_ap(v0_s, y, movie_ids)
-    # v1.5: per-movie AP averaged across the 3 seeds -- matches the canonical
-    # 3-seed-mean macro AP (0.418) reported in reports/macro_ap.md. NOT the
-    # score-ensemble (which would be a different, ensemble-quality number).
+    # v1.5: average per-movie AP across seeds, NOT score-averaged ensemble.
+    # this matches the canonical headline 0.418.
     ap15_per_seed = {s: per_movie_ap(v15_seeds[s], y, movie_ids) for s in range(3)}
-    common15 = set.intersection(*(set(ap15_per_seed[s]) for s in range(3)))
-    ap15 = {m: float(np.mean([ap15_per_seed[s][m] for s in range(3)])) for m in common15}
+    common = set.intersection(*(set(ap15_per_seed[s]) for s in range(3)))
+    ap15 = {m: float(np.mean([ap15_per_seed[s][m] for s in range(3)])) for m in common}
     ap2 = per_movie_ap(v2_s, y, movie_ids)
 
-    df = pd.read_parquet(args.cut_index, columns=["split", "movie_id", "y_inconsistent"])
-    test = df[df["split"] == "test"]
+    # per-movie metadata (n_cuts, pos_rate) for context
     meta = test.groupby("movie_id").agg(
         n_cuts=("y_inconsistent", "size"),
         n_pos=("y_inconsistent", "sum"),
@@ -95,9 +83,7 @@ def main() -> None:
             "n_cuts": int(m["n_cuts"]),
             "n_pos": int(m["n_pos"]),
             "pos_rate": float(m["pos_rate"]),
-            "v0": ap0[mid],
-            "v1_5": ap15[mid],
-            "v2": ap2[mid],
+            "v0": ap0[mid], "v1_5": ap15[mid], "v2": ap2[mid],
             "v2_gain_over_v1_5": ap2[mid] - ap15[mid],
             "v1_5_gain_over_v0": ap15[mid] - ap0[mid],
         })
@@ -105,10 +91,10 @@ def main() -> None:
     out.to_csv(args.out_csv, index=False)
     print(f"wrote {args.out_csv} ({len(out)} movies)")
 
-    print("\nMacro means (this script's filter set):")
+    print("\nMacro means:")
     for col in ("v0", "v1_5", "v2"):
         print(f"  {col:6s} mean={out[col].mean():.4f}  median={out[col].median():.4f}")
-    print(f"  Δ v2-v1.5 mean={out['v2_gain_over_v1_5'].mean():+.4f}")
+    print(f"  delta v2-v1.5 mean={out['v2_gain_over_v1_5'].mean():+.4f}")
     print(f"  movies where v2>v1.5: {(out['v2_gain_over_v1_5']>0).sum()}/{len(out)}")
 
     print("\nTop-10 v2 gain over v1.5:")
@@ -116,12 +102,14 @@ def main() -> None:
     print("\nBottom-10 (regressions):")
     print(out.tail(10).to_string(index=False))
 
-    # bar chart: per-movie v1.5 vs v2, sorted by v2 macro AP
+    # bar chart: v1.5 vs v2 per movie, sorted by v2 AP
     by_v2 = out.sort_values("v2").reset_index(drop=True)
     fig, ax = plt.subplots(figsize=(13, 4.5))
     x = np.arange(len(by_v2))
-    ax.bar(x - 0.18, by_v2["v1_5"], width=0.36, label="v1.5 (3-seed mean)", alpha=0.85, color="#888")
-    ax.bar(x + 0.18, by_v2["v2"], width=0.36, label="v2 LoRA (seed 0)", alpha=0.85, color="#1f77b4")
+    ax.bar(x - 0.18, by_v2["v1_5"], width=0.36, label="v1.5 (3-seed mean)",
+           alpha=0.85, color="#888")
+    ax.bar(x + 0.18, by_v2["v2"], width=0.36, label="v2 LoRA (seed 0)",
+           alpha=0.85, color="#1f77b4")
     ax.axhline(by_v2["v1_5"].mean(), color="#888", linestyle=":", linewidth=1, alpha=0.7,
                label=f"v1.5 macro={by_v2['v1_5'].mean():.3f}")
     ax.axhline(by_v2["v2"].mean(), color="#1f77b4", linestyle=":", linewidth=1, alpha=0.7,
@@ -130,7 +118,7 @@ def main() -> None:
     ax.set_xticklabels(by_v2["movie_id"], rotation=90, fontsize=6)
     ax.set_ylabel("per-movie AP")
     ax.set_xlabel("test movie (sorted by v2 AP)")
-    ax.set_title("Per-movie test AP: v1.5 (3-seed mean) vs v2 LoRA (seed 0)")
+    ax.set_title("Per-movie test AP: v1.5 vs v2 LoRA")
     ax.legend(loc="upper left", fontsize=9)
     ax.grid(axis="y", linestyle=":", alpha=0.4)
     fig.tight_layout()

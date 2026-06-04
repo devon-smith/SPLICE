@@ -1,15 +1,9 @@
-"""Non-learned baselines for cut-continuity scoring.
-
-Every baseline maps a cut to a scalar where HIGHER means MORE inconsistent, so
-scores line up with the trained classifier's positive-class probability:
-
-  hsv_chisq    chi-square distance between HSV colour histograms of the two frames
-  clip_cosine  1 - cosine similarity of CLIP ViT-L image embeddings
-  (raw DINOv2 cosine is read straight off the cached pair feature -- see v0_logistic)
-"""
+# non-learned baselines for cut-continuity scoring
+# all map a cut to a scalar where HIGHER means MORE inconsistent
+# (HSV chi-square histogram distance, 1 - CLIP cosine; raw DINOv2 cosine is read
+# straight off the cached pair feature in v0_logistic.py)
 
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -18,13 +12,10 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoProcessor, CLIPVisionModelWithProjection
 
-# ----------------------------------------------------------------------------
-# HSV histogram chi-square
-# ----------------------------------------------------------------------------
 
+# --- HSV histogram chi-square ----------------------------------------------
 
-def hsv_histogram(path: str | Path, bins: tuple[int, int, int] = (8, 8, 8)) -> np.ndarray | None:
-    """Normalised flattened HSV colour histogram for one image (None if unreadable)."""
+def hsv_histogram(path, bins=(8, 8, 8)):
     img = cv2.imread(str(path))
     if img is None:
         return None
@@ -35,74 +26,58 @@ def hsv_histogram(path: str | Path, bins: tuple[int, int, int] = (8, 8, 8)) -> n
     return hist / total if total > 0 else hist
 
 
-def chi_square(h1: np.ndarray, h2: np.ndarray) -> float:
-    """Symmetric chi-square distance between two histograms (0 = identical)."""
+# symmetric chi-square distance between two histograms (0 = identical)
+def chi_square(h1, h2):
     h1 = np.asarray(h1, dtype=np.float64)
     h2 = np.asarray(h2, dtype=np.float64)
     return float(0.5 * np.sum((h1 - h2) ** 2 / (h1 + h2 + 1e-10)))
 
 
-def _hist_worker(arg: tuple[str, tuple[int, int, int]]) -> np.ndarray | None:
+def _hist_worker(arg):
     path, bins = arg
     return hsv_histogram(path, bins)
 
 
-def compute_hsv_histograms(
-    paths, bins: tuple[int, int, int] = (8, 8, 8), n_workers: int = 12
-) -> dict[str, np.ndarray]:
-    """Parallel HSV histograms for a set of image paths: ``{path: histogram}``."""
+# parallel HSV histograms for a list of image paths -> {path: histogram}
+def compute_hsv_histograms(paths, bins=(8, 8, 8), n_workers=12):
     paths = list(paths)
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
         hists = list(pool.map(_hist_worker, [(p, bins) for p in paths], chunksize=256))
     return {p: h for p, h in zip(paths, hists) if h is not None}
 
 
-# ----------------------------------------------------------------------------
-# CLIP cosine
-# ----------------------------------------------------------------------------
-
+# --- CLIP cosine ------------------------------------------------------------
 
 class _PathImageDataset(Dataset):
-    def __init__(self, paths: list[str], processor) -> None:
+    def __init__(self, paths, processor):
         self.paths = paths
         self.processor = processor
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.paths)
 
-    def __getitem__(self, i: int):
+    def __getitem__(self, i):
         img = Image.open(self.paths[i]).convert("RGB")
         pv = self.processor(images=img, return_tensors="pt")["pixel_values"][0]
         return self.paths[i], pv
 
 
 class CLIPImageEncoder:
-    """Frozen CLIP image tower; produces L2-normalised image embeddings."""
-
-    def __init__(
-        self, model_id: str = "openai/clip-vit-large-patch14", device: str | None = None
-    ) -> None:
+    def __init__(self, model_id="openai/clip-vit-large-patch14", device=None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.processor = AutoProcessor.from_pretrained(model_id)
-        # vision tower + projection head; .image_embeds is the joint-space CLIP embedding
+        # vision tower + projection head; .image_embeds is the joint-space embedding
         self.model = CLIPVisionModelWithProjection.from_pretrained(model_id)
         self.model = self.model.to(self.device).eval()
         for param in self.model.parameters():
             param.requires_grad_(False)
 
     @torch.inference_mode()
-    def encode_paths(
-        self, paths, batch_size: int = 128, num_workers: int = 8
-    ) -> dict[str, np.ndarray]:
-        """``{path: normalised image embedding}`` for a set of image paths."""
+    def encode_paths(self, paths, batch_size=128, num_workers=8):
         paths = list(paths)
-        loader = DataLoader(
-            _PathImageDataset(paths, self.processor),
-            batch_size=batch_size,
-            num_workers=num_workers,
-            pin_memory=True,
-        )
-        out: dict[str, np.ndarray] = {}
+        loader = DataLoader(_PathImageDataset(paths, self.processor),
+                            batch_size=batch_size, num_workers=num_workers, pin_memory=True)
+        out = {}
         on_gpu = self.device == "cuda"
         for batch_paths, pixel_values in loader:
             pixel_values = pixel_values.to(self.device, non_blocking=True)
@@ -114,8 +89,8 @@ class CLIPImageEncoder:
         return out
 
 
-def cosine_distance_scores(emb: dict[str, np.ndarray], left_paths, right_paths) -> np.ndarray:
-    """Per-pair ``1 - cos`` (higher = more inconsistent); NaN if an embedding is missing."""
+# per-pair 1 - cos (higher = more inconsistent); NaN if either embedding is missing
+def cosine_distance_scores(emb, left_paths, right_paths):
     scores = np.full(len(left_paths), np.nan, dtype=np.float64)
     for i, (lp, rp) in enumerate(zip(left_paths, right_paths)):
         el, er = emb.get(lp), emb.get(rp)
@@ -126,8 +101,8 @@ def cosine_distance_scores(emb: dict[str, np.ndarray], left_paths, right_paths) 
     return scores
 
 
-def chisq_scores(hists: dict[str, np.ndarray], left_paths, right_paths) -> np.ndarray:
-    """Per-pair HSV chi-square distance; NaN if a histogram is missing."""
+# per-pair HSV chi-square distance; NaN if either histogram is missing
+def chisq_scores(hists, left_paths, right_paths):
     scores = np.full(len(left_paths), np.nan, dtype=np.float64)
     for i, (lp, rp) in enumerate(zip(left_paths, right_paths)):
         hl, hr = hists.get(lp), hists.get(rp)

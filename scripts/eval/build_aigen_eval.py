@@ -1,63 +1,39 @@
-"""Block 3b: build an AI-generated-video cut index from raw clip pairs.
+# build an AI-generated-video cut index from raw clip pairs
+# extracts 3 uniform keyframes per clip (matches MovieNet's shot-3-keyframe schema)
+# and writes a cut-index parquet so embedding / scoring scripts run on it unchanged.
+# usage: python scripts/eval/build_aigen_eval.py --clips_root DIR --out DIR
 
-Input layout::
-
-    <clips_root>/
-      labels.csv               schema: scripts/aigen/labels_template.csv
-      <source>/pair_<id>_left.mp4
-      <source>/pair_<id>_right.mp4
-
-labels.csv must carry ``pair_id``, ``source`` and a label column -- either
-``intended_label`` (the sourcing template's column) or ``y_inconsistent``.
-Rows marked ``quality_check=discard`` are dropped before processing.
-
-For each labelled pair this extracts three uniform keyframes from each clip
-(img0/1/2 = 0/50/100% of duration, matching MovieNet's 3-keyframes-per-shot
-convention; boundary mode then uses left img2 + right img0) and writes a
-cut-index Parquet with the MovieNet schema, so the existing embedding /
-pair-feature / scoring scripts run on it unchanged.
-
-Example:
-  python scripts/eval/build_aigen_eval.py \\
-      --clips_root /mnt/disks/splice-data/datasets/aigen/ \\
-      --out /mnt/disks/splice-data/outputs/aigen_eval/
-"""
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import argparse
 import json
-import logging
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from src.data.movienet import CUT_INDEX_COLUMNS  # noqa: E402
-from src.data.video_frames import extract_n_frames  # noqa: E402
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("build_aigen_eval")
+from src.data.movienet import CUT_INDEX_COLUMNS
+from src.data.video_frames import extract_n_frames
 
 MAX_SIDE = (1280, 720)  # 720p cap, aspect preserved
-REQUIRED_COLS = {"pair_id", "source"}
-LABEL_COLS = ("intended_label", "y_inconsistent")  # accept either; intent-based label
+LABEL_COLS = ("intended_label", "y_inconsistent")
 
 
-def _save_keyframes(clip: Path, dst_dir: Path, side: str) -> list[str]:
-    """Extract + save 3 uniform keyframes of one clip; return their paths."""
+# extract + save 3 uniform keyframes of one clip; idempotent
+def save_keyframes(clip, dst_dir, side):
     paths = [dst_dir / f"{side}_img{i}.jpg" for i in range(3)]
-    if all(p.exists() for p in paths):  # idempotent
+    if all(p.exists() for p in paths):
         return [str(p) for p in paths]
     dst_dir.mkdir(parents=True, exist_ok=True)
-    frames = extract_n_frames(clip, n=3)
-    for img, p in zip(frames, paths):
+    for img, p in zip(extract_n_frames(clip, n=3), paths):
         img.thumbnail(MAX_SIDE)
         img.convert("RGB").save(p, quality=95)
     return [str(p) for p in paths]
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
+def main():
+    ap = argparse.ArgumentParser()
     ap.add_argument("--clips_root", required=True)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
@@ -71,32 +47,28 @@ def main() -> None:
     if not labels_path.exists():
         raise SystemExit(f"labels.csv not found at {labels_path}")
     labels = pd.read_csv(labels_path, dtype={"pair_id": str})
-    missing_cols = REQUIRED_COLS - set(labels.columns)
-    if missing_cols:
-        raise SystemExit(f"labels.csv missing required columns: {sorted(missing_cols)}")
+
+    # accept either intended_label or y_inconsistent column
     label_col = next((c for c in LABEL_COLS if c in labels.columns), None)
     if label_col is None:
-        raise SystemExit(f"labels.csv needs a label column, one of {list(LABEL_COLS)}")
+        raise SystemExit(f"labels.csv needs one of {list(LABEL_COLS)}")
     labels = labels.rename(columns={label_col: "y_inconsistent"})
 
-    # drop pairs the generator flagged unusable before they ever reach the eval
+    # drop pairs the generator flagged unusable
     if "quality_check" in labels.columns:
         discard = labels["quality_check"].astype(str).str.strip().str.lower() == "discard"
         if discard.any():
-            log.info("skipping %d pairs marked quality_check=discard", int(discard.sum()))
+            print(f"skipping {discard.sum()} pairs marked quality_check=discard")
             labels = labels[~discard].reset_index(drop=True)
 
     labels["y_inconsistent"] = pd.to_numeric(labels["y_inconsistent"], errors="coerce")
     if not labels["y_inconsistent"].isin([0, 1]).all():
-        raise SystemExit(f"labels.csv: {label_col} must be 0 or 1 for every kept row")
+        raise SystemExit("y_inconsistent must be 0 or 1 for every kept row")
     labels["y_inconsistent"] = labels["y_inconsistent"].astype(int)
-    log.info(
-        "labels.csv: %d pairs across sources %s", len(labels), sorted(labels["source"].unique())
-    )
+    print(f"labels.csv: {len(labels)} pairs across sources {sorted(labels['source'].unique())}")
 
-    rows: list[dict] = []
-    failed: dict[str, str] = {}
-    shot_idx_by_source: dict[str, int] = {}
+    rows, failed = [], {}
+    shot_idx_by_source = {}
 
     for _, lab in labels.iterrows():
         pid, source = lab["pair_id"], lab["source"]
@@ -105,40 +77,32 @@ def main() -> None:
         if not left.exists() or not right.exists():
             which = "left" if not left.exists() else "right"
             failed[pid] = f"{which} clip missing"
-            log.warning("pair %s: %s clip missing", pid, which)
+            print(f"pair {pid}: {which} clip missing")
             continue
         try:
             pair_dir = kf_dir / str(pid)
-            left_paths = _save_keyframes(left, pair_dir, "left")
-            right_paths = _save_keyframes(right, pair_dir, "right")
-        except Exception as exc:  # noqa: BLE001 - one bad clip must not kill the run
+            left_paths = save_keyframes(left, pair_dir, "left")
+            right_paths = save_keyframes(right, pair_dir, "right")
+        except Exception as exc:
             failed[pid] = f"frame extraction failed: {exc}"
-            log.warning("pair %s: extraction failed: %s", pid, exc)
+            print(f"pair {pid}: extraction failed: {exc}")
             continue
 
         idx = shot_idx_by_source.get(source, 0)
         shot_idx_by_source[source] = idx + 1
         y = int(lab["y_inconsistent"])
-        rows.append(
-            {
-                "movie_id": f"aigen_{source}",
-                "shot_left_idx": idx,
-                "shot_right_idx": idx + 1,
-                "scene_left_id": 0,
-                "scene_right_id": 1 if y else 0,
-                "y_inconsistent": y,
-                "left_img0_path": left_paths[0],
-                "left_img1_path": left_paths[1],
-                "left_img2_path": left_paths[2],
-                "right_img0_path": right_paths[0],
-                "right_img1_path": right_paths[1],
-                "right_img2_path": right_paths[2],
-                "split": "test",
-                "source": source,
-                "notes": lab.get("notes", ""),
-                "shot_type": lab.get("shot_type", ""),
-            }
-        )
+        rows.append({
+            "movie_id": f"aigen_{source}",
+            "shot_left_idx": idx, "shot_right_idx": idx + 1,
+            "scene_left_id": 0, "scene_right_id": 1 if y else 0,
+            "y_inconsistent": y,
+            "left_img0_path": left_paths[0], "left_img1_path": left_paths[1],
+            "left_img2_path": left_paths[2],
+            "right_img0_path": right_paths[0], "right_img1_path": right_paths[1],
+            "right_img2_path": right_paths[2],
+            "split": "test", "source": source,
+            "notes": lab.get("notes", ""), "shot_type": lab.get("shot_type", ""),
+        })
 
     df = pd.DataFrame(rows, columns=CUT_INDEX_COLUMNS + ["source", "notes", "shot_type"])
     df.to_parquet(out_dir / "cuts.parquet", index=False)
@@ -158,9 +122,9 @@ def main() -> None:
             "\n".join(f"{p}\t{r}" for p, r in sorted(failed.items())) + "\n"
         )
 
-    log.info("processed %d/%d pairs -> %s", len(df), len(labels), out_dir / "cuts.parquet")
+    print(f"processed {len(df)}/{len(labels)} pairs -> {out_dir / 'cuts.parquet'}")
     if failed:
-        log.warning("%d pairs failed (see failed_pairs.txt)", len(failed))
+        print(f"{len(failed)} pairs failed (see failed_pairs.txt)")
 
 
 if __name__ == "__main__":
