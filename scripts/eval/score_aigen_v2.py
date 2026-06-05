@@ -41,11 +41,12 @@ tfm = transforms.Compose([
 
 
 # LayerNorm([eL | eR | |eL-eR| | cos]) -> scalar logit (same as v2 training)
+# use_norm=False for checkpoints saved before the LayerNorm was added
 class PairMLP(nn.Module):
-    def __init__(self, emb_dim=768, hidden=(512, 128), dropout=0.1):
+    def __init__(self, emb_dim=768, hidden=(512, 128), dropout=0.1, use_norm=True):
         super().__init__()
         in_dim = 2 * emb_dim + emb_dim + 1
-        self.norm = nn.LayerNorm(in_dim)
+        self.norm = nn.LayerNorm(in_dim) if use_norm else nn.Identity()
         layers = []
         dim = in_dim
         for w in hidden:
@@ -64,8 +65,10 @@ class PairMLP(nn.Module):
 def load_v2_seed(seed_dir, device):
     base = AutoModel.from_pretrained("facebook/dinov2-base")
     backbone = PeftModel.from_pretrained(base, str(seed_dir / "backbone_lora")).to(device)
-    head = PairMLP().to(device)
-    head.load_state_dict(torch.load(seed_dir / "head.pt", map_location=device, weights_only=False))
+    state = torch.load(seed_dir / "head.pt", map_location=device, weights_only=False)
+    use_norm = "norm.weight" in state
+    head = PairMLP(use_norm=use_norm).to(device)
+    head.load_state_dict(state)
     backbone.eval()
     head.eval()
     return backbone, head
