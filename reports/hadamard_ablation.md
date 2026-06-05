@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # Hadamard pair-feature ablation — does eL ⊙ eR help?
 
 The current pair feature is `[eL | eR | |eL-eR| | cos(eL,eR)]` (2305-d). The

@@ -13,7 +13,6 @@ data/checkpoints/
 *.tar
 *.zip
 logs/
-wandb/
 outputs/
 .DS_Store
 .vscode/

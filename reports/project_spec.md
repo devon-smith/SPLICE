@@ -1,3 +1,5 @@
+<!-- AI-USE: This project-spec document was AI-assisted with Claude via Claude Code. -->
+
 # SPLICE — Project Specification
 
 Cross-shot visual consistency detection for narrative film and AI-generated

@@ -1,7 +1,7 @@
-"""Experiment 1: ensemble evaluation of v0 logistic + v1.5 MLP + CLIP cosine.
+"""One-off Veo/Dispatch pilot ensemble report.
 
 Combines the three scorers three ways and evaluates on the MovieNet test split
-(in-distribution sanity) and the 10-pair Veo pilot:
+(in-distribution sanity) and the fixed 10-pair Veo pilot with Dispatch buckets:
 
   max       max of the three percentile-normalised scores
   mean      mean of the three percentile-normalised scores
@@ -11,8 +11,9 @@ All three scorers live on different native scales (v0/v1.5 are probabilities,
 CLIP cosine is a distance), so every score is first mapped to its percentile in
 the MovieNet *val* distribution -- 'max' and 'mean' then compare like with like.
 
-Reads only cached scores (outputs/v0/scores.npz, outputs/v1_sound/scores.npz,
-per_pair_scores.csv); trains nothing heavy and modifies no v0/v1.5 artifact.
+This intentionally hard-codes the pilot pair ids, human Dispatch buckets, and
+SPLICE output paths. It is a report generator, not a reusable ensemble framework.
+Reads only cached scores; trains nothing heavy and modifies no v0/v1.5 artifact.
 
   python scripts/eval/ensemble_eval.py
 """
@@ -231,9 +232,10 @@ def _write_report(
     coef = lr.coef_[0]
 
     md = [
-        "# Experiment 1 — Ensemble Evaluation\n",
+        "# Veo Pilot Ensemble Evaluation\n",
         "v0 logistic + v1.5 MLP + CLIP cosine, combined three ways and evaluated on "
-        "the MovieNet test split and the 10-pair Veo pilot. Each scorer is mapped to "
+        "the MovieNet test split and the fixed 10-pair Veo/Dispatch pilot. Each "
+        "scorer is mapped to "
         "its percentile in the MovieNet **val** distribution before ensembling, so "
         "the three native scales (probability, probability, cosine distance) become "
         "comparable. Produced by `scripts/eval/ensemble_eval.py`; reads cached "

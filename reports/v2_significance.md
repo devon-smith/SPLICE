@@ -1,3 +1,6 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+<!-- NOTE: This checked-in report is the archival single-run r8_a16 significance output. The active script now targets the final v2 3-seed mean score file and should be rerun on the VM to refresh this report. -->
+
 # v2 LoRA vs v1.5 Significance Tests
 
 Config: `r8_a16`  (1000 bootstrap resamples, 10,000 F1 permutations, movie-level resampling throughout)

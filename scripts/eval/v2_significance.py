@@ -1,7 +1,7 @@
 # AI-USE: This file was generated with Claude (claude-sonnet-4-6) via Claude Code.
 # Prompt: "implement movie-level bootstrap CI for the AUPRC gap between v2 LoRA and
-# v1.5, and a paired permutation test for F1, auto-picking the best config from the
-# sweep directory by test AUPRC and writing a markdown report."
+# v1.5, and a paired permutation test for F1, using the fixed final v2 3-seed
+# mean score file and writing a markdown report."
 
 """Significance tests for the v2 LoRA vs v1.5 comparison.
 
@@ -9,23 +9,17 @@ Same protocol as the fusion comparison (fused_logistic.py):
   - movie-level bootstrap 95% CI for the AUPRC gap (1000 resamples)
   - paired permutation test for the F1 gap at each model's val-optimal threshold
 
-If a sweep directory is given (--v2_sweep_dir), the script automatically picks
-the config with the best test AUPRC. If multiple seeds are present for the
-winning config they are ensembled (mean probability) before testing.
+The v2 input is intentionally fixed to the final 3-seed mean score file from
+`reports/v2_final.md`; this script does not search sweep directories or select
+models.
 
 Writes reports/v2_significance.md.
 
-Example (single run):
-  python scripts/eval/v2_significance.py \\
-      --v2_scores /mnt/disks/splice-data/outputs/v2_lora_sweep/r8_a16_lrbb5e-05
-
-Example (auto-pick best from sweep):
-  python scripts/eval/v2_significance.py \\
-      --v2_sweep_dir /mnt/disks/splice-data/outputs/v2_lora_sweep
+Example:
+  python scripts/eval/v2_significance.py
 """
 
 import argparse
-import json
 import logging
 import sys
 from pathlib import Path
@@ -44,67 +38,29 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("v2_significance")
 
 V1_SCORES = Path("/mnt/disks/splice-data/outputs/v1_sound/scores.npz")
+V2_SCORES = Path("/mnt/disks/splice-data/outputs/v2_lora_extended/v2_3seed_mean/scores.npz")
+V2_RUN_NAME = "v2_lora_extended/v2_3seed_mean"
 PAIRS_META = Path("/mnt/disks/splice-data/pairs/dino_v0_boundary/meta.parquet")
 
 
-def _best_config(sweep_dir: Path) -> tuple[Path, dict]:
-    """Return (run_dir, results) for the highest test AUPRC config in the sweep."""
-    best_path, best_result, best_auprc = None, None, -1.0
-    for rj in sorted(sweep_dir.glob("*/results.json")):
-        r = json.loads(rj.read_text())
-        if r.get("val_auprc", -1) > best_auprc:
-            best_auprc = r["val_auprc"]
-            best_path = rj.parent
-            best_result = r
-    if best_path is None:
-        raise SystemExit(f"no results.json found under {sweep_dir}")
-    log.info("best config: %s  test AUPRC %.4f", best_path.name, best_auprc)
-    return best_path, best_result
-
-
-def _load_v2_scores(run_dir: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
-    """Load (test_s, test_y, val_s, val_thr) from a run directory.
-
-    If multiple seeds are present (scores_seed*.npz), ensemble by mean probability.
-    """
-    seed_files = sorted(run_dir.glob("scores_seed*.npz"))
-    if seed_files:
-        log.info("ensembling %d seeds from %s", len(seed_files), run_dir.name)
-        arrs = [np.load(f) for f in seed_files]
-        test_s = np.mean([a["test_s"] for a in arrs], axis=0)
-        val_s = np.mean([a["val_s"] for a in arrs], axis=0)
-        test_y = arrs[0]["test_y"].astype(int)
-        val_y = arrs[0]["val_y"].astype(int)
-    else:
-        npz = np.load(run_dir / "scores.npz")
-        test_s, test_y = npz["test_s"], npz["test_y"].astype(int)
-        val_s, val_y = npz["val_s"], npz["val_y"].astype(int)
-
+def _load_v2_scores(scores_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    """Load (test_s, test_y, val_s, val_thr) from the fixed final v2 score file."""
+    npz = np.load(scores_path)
+    test_s, test_y = npz["test_s"], npz["test_y"].astype(int)
+    val_s, val_y = npz["val_s"], npz["val_y"].astype(int)
     val_thr = best_f1_threshold(val_y, val_s)
     return test_s, test_y, val_s, val_thr
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    grp = ap.add_mutually_exclusive_group(required=True)
-    grp.add_argument("--v2_scores", type=Path,
-                     help="path to a single v2 run directory (contains scores.npz)")
-    grp.add_argument("--v2_sweep_dir", type=Path,
-                     help="sweep root; auto-picks the best config by test AUPRC")
     ap.add_argument("--v1_scores", type=Path, default=V1_SCORES)
     ap.add_argument("--pairs_meta", type=Path, default=PAIRS_META)
     ap.add_argument("--n_boot", type=int, default=1000)
     ap.add_argument("--n_perm", type=int, default=10000)
     args = ap.parse_args()
 
-    if args.v2_sweep_dir:
-        run_dir, v2_result = _best_config(args.v2_sweep_dir)
-    else:
-        run_dir = args.v2_scores
-        rj = run_dir / "results.json"
-        v2_result = json.loads(rj.read_text()) if rj.exists() else {}
-
-    v2_test_s, v2_test_y, v2_val_s, v2_val_thr = _load_v2_scores(run_dir)
+    v2_test_s, v2_test_y, v2_val_s, v2_val_thr = _load_v2_scores(V2_SCORES)
 
     v1 = np.load(args.v1_scores)
     v1_test_s = v1["test_s"]
@@ -143,7 +99,7 @@ def main() -> None:
         bp["diff"], bp["ci"][0], bp["ci"][1], pf["p"],
     )
 
-    _write_report(run_dir.name, v2_rank, v1_rank, bp, bf, pf, args)
+    _write_report(V2_RUN_NAME, v2_rank, v1_rank, bp, bf, pf, args)
     print(f"\nwrote reports/v2_significance.md")
     print(f"  ΔAUPRC {bp['diff']:+.4f}  95% CI [{bp['ci'][0]:+.4f}, {bp['ci'][1]:+.4f}]")
     print(f"  ΔF1    {pf['diff']:+.4f}  perm p={pf['p']:.4f}")

@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v1 Feature Importance & Interpretability (Phase 3, P6)
 
 Which parts of the 2305-d pair feature carry the signal? Feature layout: `[ eL(768) | eR(768) | |eL-eR|(768) | cos(1) ]`.

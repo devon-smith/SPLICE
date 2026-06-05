@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # Calibration — v0 / v1.5 / v2 reliability + ECE + Brier
 
 All three heads were trained with class-weighted BCE on a ~7.5%-positive

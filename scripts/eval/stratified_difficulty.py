@@ -1,7 +1,5 @@
-# AI-USE: This file was likely generated with Claude (claude-sonnet-4-6) via Claude Code,
-# assessed from consistent docstring format, logging/argparse patterns, and path
-# conventions (HERE/REPO) shared uniformly across the codebase.
-# Prompt (inferred): "write Phase-3 P3: stratified evaluation of v1.5 by transition
+# AI-USE: This file was AI-assisted with Claude (claude-sonnet-4-6) via Claude Code.
+# Prompt summary: "write Phase-3 P3: stratified evaluation of v1.5 by transition
 # difficulty across DINOv2 cosine quintile, movie cut-count, cut position in film,
 # and scene-boundary depth."
 

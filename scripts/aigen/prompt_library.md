@@ -1,3 +1,6 @@
+<!-- AI-USE: This prompt library was AI-assisted with Claude (claude-sonnet-4-6) via Claude Code. -->
+<!-- Scope: drafted prompt-pair templates for sourcing the AI-gen evaluation set. -->
+
 # AI-Gen Prompt Library
 
 Fifty ready-to-use prompt-pair templates for sourcing the SPLICE AI-gen evaluation

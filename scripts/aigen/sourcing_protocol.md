@@ -1,3 +1,6 @@
+<!-- AI-USE: This sourcing protocol was AI-assisted with Claude (claude-sonnet-4-6) via Claude Code. -->
+<!-- Scope: drafted workflow and labeling guidance for the AI-gen evaluation set. -->
+
 # AI-Gen Sourcing Protocol
 
 How to generate and label AI-gen clip pairs for the SPLICE evaluation set. Read

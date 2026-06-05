@@ -1,3 +1,5 @@
+<!-- AI-USE: This related-work document was AI-assisted with Claude via Claude Code. -->
+
 # Related Work
 
 Five papers that frame SPLICE: our backbone, our loss family, the closest prior

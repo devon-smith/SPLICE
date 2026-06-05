@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # Fused DINOv2+CLIP Logistic — Results (Action 3)
 
 Logistic regression on the 4610-d fused boundary feature `[DINOv2 2305-d | CLIP 2305-d]`, trained with v0_logistic.py's recipe (StandardScaler + balanced LogisticRegression, C=1.0, lbfgs, max_iter=2000). The v2 architecture experiment. Produced by `scripts/train/fused_logistic.py`.

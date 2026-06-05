@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v1.5 Error Analysis (Phase 3, P4)
 
 v1.5 (seed-2 sound MLP) on the test split, decision threshold 0.754. Of 105,095 test cuts: 5,863 false positives (6.0% of negatives) and 3,724 false negatives (51.3% of positives). The CSVs list the most confident 50 of each with all five model scores and keyframe paths; this section describes the *full* error sets. Description only -- qualitative interpretation is left to the team.

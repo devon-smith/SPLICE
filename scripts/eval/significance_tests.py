@@ -1,7 +1,5 @@
-# AI-USE: This file was likely generated with Claude (claude-sonnet-4-6) via Claude Code,
-# assessed from consistent docstring format, logging/argparse patterns, and path
-# conventions (HERE/REPO) shared uniformly across the codebase.
-# Prompt (inferred): "write Phase-3 P2: significance tests for five model comparisons
+# AI-USE: This file was AI-assisted with Claude (claude-sonnet-4-6) via Claude Code.
+# Prompt summary: "write Phase-3 P2: significance tests for five model comparisons
 # using DeLong's AUROC test, movie-level bootstrap CI for AUPRC, and paired
 # permutation test for F1, reading cached predictions only."
 

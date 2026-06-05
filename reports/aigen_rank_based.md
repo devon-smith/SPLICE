@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # AI-Gen Rank-Based Flagging
 
 Each Veo pilot pair is ranked by percentile against the MovieNet within-scene (y=0) test distribution (n=97,840). A pair is **flagged** when that percentile exceeds **95** for any of v1.5, v0 logistic, or CLIP cosine. This sidesteps absolute calibration. Source: `outputs/aigen_eval/results/rank_based_scores.csv`.

@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v0 Results — frozen DINOv2 + logistic cut-continuity scorer
 
 **Milestone 2 · May 2026.** v0 establishes the floor: can a pretrained DINOv2
@@ -30,8 +32,8 @@ does the learned head beat the obvious zero-training baselines?
 | CLIP ViT-L cosine | 0.719 | 0.157 | 0.233 | — | 0.176 | 0.343 |
 
 Positive base rate 7.47%. AUPRC is the headline metric (class imbalance).
-Four runs logged to W&B project `splice-v0`. τ95 is calibrated below; HSV/CLIP
-have no within-shot calibration (handoff scopes τ95 to the DINOv2-based scorers).
+τ95 is calibrated below; HSV/CLIP have no within-shot calibration (handoff
+scopes τ95 to the DINOv2-based scorers).
 
 ## Threshold calibration
 

@@ -1,6 +1,7 @@
-# score the 10 Veo continuous-action pairs through the v2 LoRA 3-seed ensemble
-# v2's backbone is LoRA-tuned so frozen DINOv2 embeddings can't be reused;
-# we have to run each seed's tuned backbone forward on (left_img2, right_img0).
+# one-off scorer for the fixed 10-pair Veo/Dispatch pilot through v2 LoRA
+# v2's backbone is LoRA-tuned so frozen DINOv2 embeddings can't be reused.
+# This intentionally hard-codes the pilot keyframe location, v2 checkpoint, and
+# Dispatch bucket ids; it is not a general AI-gen scoring harness.
 # usage: python scripts/eval/score_aigen_v2.py
 
 import argparse

@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # AI-Gen Calibration
 
 MovieNet operating thresholds do not transfer to AI-gen footage. This gives domain-specific percentile tables for all six scorers, so a Veo score can be judged against *other Veo continuous-action pairs* rather than against MovieNet. **The Veo side is n=10, single-class, one generator — these baselines are provisional.** Source: `configs/aigen_calibration.json`.

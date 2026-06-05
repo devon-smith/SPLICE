@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v1.5 Edge-Case Audit
 
 Internal sanity check (not a publication artifact). Confirms the v1.5 cut-continuity scorer behaves sensibly at four extremes. v1.5 outputs an **inconsistency probability** in [0, 1]: ~0 = strongly consistent, ~1 = strongly inconsistent. Reference operating points (MovieNet): F1-optimal val threshold 0.754, deployable τ99 threshold 0.645.

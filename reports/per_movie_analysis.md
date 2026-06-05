@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # Per-movie diagnostic — where does v2 LoRA help, where does it not?
 
 Per-movie test AP for v0 (logistic), v1.5 (3-seed mean of per-movie APs — the

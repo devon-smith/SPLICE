@@ -10,7 +10,6 @@ dependencies:
       - transformers>=4.56.0
       - peft
       - accelerate
-      - wandb
       - timm
       - datasets
       - webdataset

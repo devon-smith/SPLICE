@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # Macro per-movie AP — Literature-Aligned MovieNet Metric
 
 MovieNet scene-segmentation papers (ShotCoL, BaSSL, TranS4mer, MEGA, MASRC,

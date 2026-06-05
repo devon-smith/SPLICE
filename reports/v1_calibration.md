@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v1.5 Comprehensive Calibration (Phase 3, P5)
 
 v1.5 = seed-2 sound MLP. Within-shot scores are the v1.5 model applied to img0/1/2 pairs of single shots (genuinely continuous); test metrics use the cached test predictions.

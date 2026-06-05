@@ -1,7 +1,7 @@
 # AI-USE: This file was generated with Claude (claude-sonnet-4-6) via Claude Code.
 # Prompt: "create a YAML config for the v2 LoRA sweep with backbone, head, lora,
 # optim, and train sections, and a sweep grid over r and lora_alpha."
-# User subsequently modified epochs (to 20) and patience (to 5).
+# Final reported v2 run uses a 35-epoch budget and patience 7.
 
 backbone: facebook/dinov2-base
 head:
@@ -19,8 +19,8 @@ optim:
   weight_decay: 1.0e-4
   schedule: cosine
 train:
-  epochs: 20
-  patience: 5
+  epochs: 35
+  patience: 7
   batch_size: 32          # pairs per step; DINOv2 sees 2x images
   max_cuts_per_epoch: 25000   # random subsample of train each epoch for fast iterations
   grad_accumulation: 4    # effective batch = 128

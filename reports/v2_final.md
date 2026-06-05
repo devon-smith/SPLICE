@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v2 LoRA r=8 α=16 — Final 3-Seed Result
 
 Three independent seeds (0, 1, 2) of v2 — LoRA r=8/α=16 adapters on DINOv2-base

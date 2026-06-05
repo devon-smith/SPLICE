@@ -1,7 +1,5 @@
-# AI-USE: This file was likely generated with Claude (claude-sonnet-4-6) via Claude Code,
-# assessed from consistent docstring format, logging/argparse patterns, and path
-# conventions (HERE/REPO) shared uniformly across the codebase.
-# Prompt (inferred): "write a v1 training script for a 2305-512-128-1 MLP head on
+# AI-USE: This file was AI-assisted with Claude (claude-sonnet-4-6) via Claude Code.
+# Prompt summary: "write a v1 training script for a 2305-512-128-1 MLP head on
 # frozen DINOv2 pair features, with Adam + cosine schedule and early-stopping on
 # val AUPRC."
 
@@ -20,9 +18,8 @@ import argparse
 import copy
 import json
 import logging
-import os
 import sys
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
@@ -60,35 +57,6 @@ class MLPHead(nn.Module):
         return self.net(x).squeeze(-1)
 
 
-def open_wandb(project: str, mode: str, config: dict):
-    """Best-effort W&B run; returns the run or None (logging is never fatal)."""
-    if mode == "disabled":
-        return None
-    try:
-        import wandb
-
-        has_key = bool(os.environ.get("WANDB_API_KEY")) or bool(wandb.api.api_key)
-        resolved = mode if (mode != "online" or has_key) else "offline"
-        return wandb.init(
-            project=project,
-            name=f"v1_mlp_{date.today().isoformat()}",
-            mode=resolved,
-            config=config,
-        )
-    except Exception as exc:  # noqa: BLE001
-        log.warning("W&B init failed: %s", exc)
-        return None
-
-
-def wandb_log(run, payload: dict) -> None:
-    if run is None:
-        return
-    try:
-        run.log(payload)
-    except Exception as exc:  # noqa: BLE001
-        log.warning("W&B log failed: %s", exc)
-
-
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--features", default=DEFAULT_FEATURES)
@@ -101,8 +69,6 @@ def main() -> None:
     ap.add_argument("--weight_decay", type=float, default=0.0,
                     help="Adam weight decay (v1.5 uses 1e-4; default 0 preserves legacy behaviour)")
     ap.add_argument("--seed", type=int, default=231)
-    ap.add_argument("--wandb_project", default="splice-v0")
-    ap.add_argument("--wandb_mode", default="online", choices=["online", "offline", "disabled"])
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -143,8 +109,6 @@ def main() -> None:
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.epochs)  # CS231N Lec 3: Learning rate schedules (cosine LR schedule)
     log.info("class-balancing pos_weight=%.2f", pos_weight.item())
 
-    run = open_wandb(args.wandb_project, args.wandb_mode, vars(args))
-
     n = len(y_tr)
     best_auprc, best_state, best_epoch, stale = -1.0, None, -1, 0
     for epoch in range(args.epochs):
@@ -166,15 +130,6 @@ def main() -> None:
         val_auprc = ranking_metrics(y_va.cpu().numpy(), val_scores)["auprc"]
         train_loss = running / n
         log.info("epoch %2d  train_loss %.4f  val_auprc %.4f", epoch, train_loss, val_auprc)
-        wandb_log(
-            run,
-            {
-                "epoch": epoch,
-                "train_loss": train_loss,
-                "val_auprc": val_auprc,
-                "lr": sched.get_last_lr()[0],
-            },
-        )
 
         if val_auprc > best_auprc:
             best_auprc, best_epoch, stale = val_auprc, epoch, 0
@@ -217,12 +172,6 @@ def main() -> None:
         out_dir / "scores.npz", val_s=val_scores, val_y=y_va_np, test_s=test_scores, test_y=y_te_np
     )
     (out_dir / "results.json").write_text(json.dumps(row, indent=2))
-    wandb_log(run, {f"test_{k}": v for k, v in rank.items() if isinstance(v, float)})
-    if run is not None:
-        try:
-            run.finish()
-        except Exception as exc:  # noqa: BLE001
-            log.warning("W&B finish failed: %s", exc)
 
     print("\n=== v1 MLP (test split) ===")
     for k in ("auroc", "auprc", "f1_at_val_thr", "precision_at_val_thr", "recall_at_val_thr"):

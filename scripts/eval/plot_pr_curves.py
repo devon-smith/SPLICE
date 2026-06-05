@@ -1,12 +1,12 @@
 # AI-USE: This file was generated with Claude (claude-sonnet-4-6) via Claude Code.
 # Prompt: "write a script that loads cached scores for raw DINOv2 cosine, v0 logistic,
-# v1.5 MLP, and v2 LoRA from existing score files, optionally computes HSV and CLIP
-# on-the-fly, and plots all models on a single precision-recall curve figure saved
-# to reports/figures/pr_curves.png."
+# v1.5 MLP, and the fixed final v2 LoRA 3-seed mean score file, optionally computes
+# HSV and CLIP on-the-fly, and plots all models on a single precision-recall curve
+# figure saved to reports/figures/pr_curves.png."
 
 """Plot precision-recall curves for all 6 models on the MovieNet test split.
 
-Fast models (raw DINOv2 cosine, v0 logistic, v1.5 MLP, v2 LoRA) load from
+Fast models (raw DINOv2 cosine, v0 logistic, v1.5 MLP, v2 LoRA 3-seed mean) load from
 cached score files and run in seconds.  Slow models (HSV chi-sq, CLIP cosine)
 are computed on-the-fly from images/embeddings; use --skip_slow to omit them.
 
@@ -18,7 +18,6 @@ Usage:
 """
 
 import argparse
-import json
 import logging
 import sys
 from pathlib import Path
@@ -46,26 +45,13 @@ V0_MODEL       = Path("/mnt/disks/splice-data/outputs/v0/v0_logistic.joblib")
 V1_SCALER      = Path("/mnt/disks/splice-data/outputs/v1_sound/scaler.joblib")
 V1_MODEL       = Path("/mnt/disks/splice-data/outputs/v1_sound/v1_sound_seed2.pt")
 V1_SCORES_NPZ  = Path("/mnt/disks/splice-data/outputs/v1_sound/scores.npz")
-V2_SWEEP_DIR   = Path("/mnt/disks/splice-data/outputs/v2_lora_20260530")
+V2_SCORES_NPZ  = Path("/mnt/disks/splice-data/outputs/v2_lora_extended/v2_3seed_mean/scores.npz")
 CUTS_INDEX     = Path("/mnt/disks/splice-data/outputs/cut_index/cuts.parquet")
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _best_v2_dir(sweep_dir: Path) -> Path:
-    best_path, best_auprc = None, -1.0
-    for rj in sorted(sweep_dir.glob("*/results.json")):
-        r = json.loads(rj.read_text())
-        if r.get("test_auprc", -1) > best_auprc:
-            best_auprc = r["test_auprc"]
-            best_path = rj.parent
-    if best_path is None:
-        raise SystemExit(f"no results.json found under {sweep_dir}")
-    log.info("v2 best config: %s  test AUPRC %.4f", best_path.name, best_auprc)
-    return best_path
-
 
 def _load_pair_features(split: str = "test"):
     import pandas as pd
@@ -97,9 +83,8 @@ def _v1_scores(feats: np.ndarray) -> np.ndarray:
         return torch.sigmoid(model(x)).numpy().ravel()
 
 
-def _v2_scores(sweep_dir: Path) -> tuple[np.ndarray, np.ndarray]:
-    run_dir = _best_v2_dir(sweep_dir)
-    npz = np.load(run_dir / "scores.npz")
+def _v2_scores() -> tuple[np.ndarray, np.ndarray]:
+    npz = np.load(V2_SCORES_NPZ)
     return npz["test_s"], npz["test_y"].astype(int)
 
 
@@ -188,7 +173,6 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--skip_slow", action="store_true",
                     help="skip HSV and CLIP (they take 10-30 min to compute)")
-    ap.add_argument("--v2_sweep_dir", type=Path, default=V2_SWEEP_DIR)
     ap.add_argument("--out", type=Path,
                     default=REPO / "reports" / "figures" / "pr_curves.png")
     args = ap.parse_args()
@@ -198,7 +182,7 @@ def main() -> None:
     log.info("test set: %d cuts, %.2f%% positive", len(y), 100 * y.mean())
 
     # Verify v2 labels align
-    v2_s, v2_y = _v2_scores(args.v2_sweep_dir)
+    v2_s, v2_y = _v2_scores()
     if not np.array_equal(y, v2_y):
         raise SystemExit("label mismatch between pair features and v2 scores.npz")
 

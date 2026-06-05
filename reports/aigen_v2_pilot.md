@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # Veo pilot — v2 LoRA 3-seed ensemble scoring (qualitative)
 
 The same 10 Veo continuous-action pairs scored through earlier models, now also

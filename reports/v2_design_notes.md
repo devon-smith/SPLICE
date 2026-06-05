@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v2 Design Notes — CLIP+DINOv2 Fusion Scaffold
 
 Status: **scaffold built and verified, no head trained.** This note records what

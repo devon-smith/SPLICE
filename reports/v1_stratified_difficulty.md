@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v1 Stratified Evaluation by Transition Difficulty
 
 v1.5 (seed-2 sound MLP) on the test split: 105,095 cuts, 64 movies, 6.90% positive. Decision threshold 0.754 (F1-optimal on val).

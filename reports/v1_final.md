@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # SPLICE v1 — Cross-Shot Visual Continuity Scoring
 
 CS231n Spring 2026 · Devon Smith, Lily Bailey, Xander Hnasko

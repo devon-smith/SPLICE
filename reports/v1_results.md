@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v1 Results — head and pooling ablations
 
 v1 ablates two axes of the frozen-DINOv2 pipeline, holding the backbone fixed:
@@ -61,4 +63,4 @@ python scripts/train/v1_mlp.py --features /mnt/disks/splice-data/pairs/dino_v0_b
 ```
 
 Artifacts: `outputs/v0_mean_pool/`, `outputs/v1_mlp/` (model, scaler, scores,
-results). W&B run `v1_mlp_2026-05-21` in project `splice-v0`.
+results).

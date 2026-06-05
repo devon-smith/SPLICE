@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # Multi-keyframe (mean_pool_3) ablation — does using all 3 shot keyframes help?
 
 MovieNet provides 3 keyframes per shot (`img_0/1/2`). The default pair feature

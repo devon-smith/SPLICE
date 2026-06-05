@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v2 LoRA r=8 α=16 — Extended Single-Seed Run
 
 Extended training of the v2 r=8/α=16 config (seed 42) to determine where val

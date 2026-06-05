@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v1.5 — Soundly-Regularized MLP (Phase 3, P1)
 
 Full grid sweep: dropout [0.0, 0.1, 0.2, 0.3, 0.4, 0.5] x weight_decay [0.0, 1e-05, 0.0001, 0.001] x 3 seeds = 72 runs. Each run early-stops on val AUPRC (patience 5, best checkpoint kept). The held-out test set is scored once, after the config is selected on val.

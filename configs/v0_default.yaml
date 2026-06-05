@@ -36,7 +36,3 @@ baselines:
 calibration:
   quantile: 0.95
   within_shot_pairs: [[0, 1], [1, 2], [0, 2]]   # img index pairs
-
-wandb:
-  project: splice-v0
-  mode: online            # online | offline | disabled

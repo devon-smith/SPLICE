@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v0 Stratified Evaluation
 
 Slices of the v0 **test split** predictions (105,095 cuts, 64 movies, 6.90% positive). Compares the v0 logistic model against the raw DINOv2 cosine baseline. No retraining -- cached scores only.

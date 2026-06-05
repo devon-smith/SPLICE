@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v1 Significance Tests (Phase 3, P2)
 
 Five model comparisons on the shared test split. DeLong's test for the AUROC difference; movie-level bootstrap (1000 resamples) for the AUPRC-difference CI; paired permutation test (10,000 permutations) for the F1 difference. A 95% CI excluding 0, or p < 0.05, is significant. v1.5 = the seed-2 sound MLP.

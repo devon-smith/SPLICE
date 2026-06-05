@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # Veo pilot diagnostic — investigating v2's lower Spearman
 
 Spearman ρ vs Dispatch buckets (clean=1, drift=2, major=3): v0 +0.66, CLIP +0.61,

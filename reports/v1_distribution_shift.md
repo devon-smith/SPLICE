@@ -1,3 +1,5 @@
+<!-- AI-USE: This report narrative is AI-generated analysis of run artifacts with Claude via Claude Code. Numeric values come from the referenced scripts/artifacts. -->
+
 # v1.5 Distribution-Shift Diagnostic
 
 Veo continuous-action pairs (all intended y=0) score far below MovieNet within-scene cuts. This checks whether that is a model failure or a real property of the data, by comparing score distributions across three populations. Scores are **inconsistency** scores (higher = less continuous); raw cosine is 1 − cos(eL, eR) on the boundary keyframes. Produced by `scripts/eval/distribution_shift_diagnostic.py` from cached scores (seed-2 v1.5, MovieNet test split).
