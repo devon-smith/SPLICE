@@ -53,7 +53,7 @@ class MLPHead(nn.Module):
         return self.net(x).squeeze(-1)
 
 
-# CS231N Lec 12: Supervised contrastive loss — projection head maps features to embedding space
+# Lec 12: Supervised contrastive loss — projection head maps features to embedding space
 class ProjectionHead(nn.Module):
     def __init__(self, in_dim=2305, hidden=512, out_dim=128):
         super().__init__()
@@ -105,14 +105,14 @@ def main():
     proj = ProjectionHead(in_dim=in_dim).to(device)
     clf = MLPHead(in_dim=in_dim, dropout=DROPOUT).to(device)
 
-    supcon = SupConLoss(temperature=args.temperature)  # CS231N Lec 12: Supervised contrastive loss (SupConLoss)
+    supcon = SupConLoss(temperature=args.temperature)  # Lec 12: Supervised contrastive loss (SupConLoss)
     bce = nn.BCEWithLogitsLoss()  # balanced sampler handles class weighting
 
-    optim = torch.optim.Adam(  # CS231N Lec 3: Adam optimizer usage
+    optim = torch.optim.Adam(  # Lec 3: Adam optimizer usage
         list(proj.parameters()) + list(clf.parameters()),
-        lr=LR, weight_decay=WEIGHT_DECAY,  # CS231N Lec 3: Weight decay / L2 regularization on MLP head
+        lr=LR, weight_decay=WEIGHT_DECAY,  # Lec 3: Weight decay / L2 regularization on MLP head
     )
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=EPOCHS)  # CS231N Lec 3: Learning rate schedules (cosine LR schedule)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=EPOCHS)  # Lec 3: Learning rate schedules (cosine LR schedule)
     print(f"lambda_sc={args.lambda_sc:.2f}  temperature={args.temperature:.3f}  batch={BATCH_SIZE}")
 
     best_auprc, best_proj, best_clf, best_epoch, stale = -1.0, None, None, -1, 0
@@ -126,7 +126,7 @@ def main():
             optim.zero_grad()
             z = proj(x_b)
             logit = clf(x_b)
-            l_sc = supcon(z, y_b.long())  # CS231N Lec 12: Contrastive positive/negative pair construction from scene labels
+            l_sc = supcon(z, y_b.long())  # Lec 12: Contrastive positive/negative pair construction from scene labels
             l_bce = bce(logit, y_b)
             loss = args.lambda_sc * l_sc + (1 - args.lambda_sc) * l_bce
             loss.backward()
