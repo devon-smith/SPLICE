@@ -18,6 +18,7 @@ CLIP_PAIR_FEATURE_DIM = 2 * CLIP_EMBEDDING_DIM + CLIP_EMBEDDING_DIM + 1
 FUSED_PAIR_FEATURE_DIM = PAIR_FEATURE_DIM + CLIP_PAIR_FEATURE_DIM  # 4610
 
 
+# CS231N Lec 4: Backpropagation through the pair feature head
 # (n,768),(n,768) -> (n,2305); with include_hadamard, (n,3073)
 def build_pair_features_batch(e_left, e_right, include_hadamard=False):
     e_l = np.asarray(e_left, dtype=np.float32)

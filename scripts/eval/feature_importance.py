@@ -1,3 +1,10 @@
+# AI-USE: This file was likely generated with Claude (claude-sonnet-4-6) via Claude Code,
+# assessed from consistent docstring format, logging/argparse patterns, and path
+# conventions (HERE/REPO) shared uniformly across the codebase.
+# Prompt (inferred): "write Phase-3 P6: feature importance for the 2305-d v0/v1 pair
+# feature via coefficient norms, permutation importance, ablation logistic models,
+# and linear probes for low-level image attributes."
+
 """Phase-3 P6: feature importance and interpretability for the v0/v1 pair feature.
 
   1. coefficient norms of the v0 logistic head, by feature slice

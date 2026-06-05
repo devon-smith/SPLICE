@@ -1,3 +1,8 @@
+# AI-USE: This file was generated with Claude (claude-sonnet-4-6) via Claude Code.
+# Prompt: "create a YAML config for the v2 LoRA sweep with backbone, head, lora,
+# optim, and train sections, and a sweep grid over r and lora_alpha."
+# User subsequently modified epochs (to 20) and patience (to 5).
+
 backbone: facebook/dinov2-base
 head:
   hidden: [512, 128]

@@ -27,6 +27,7 @@ class Shot:
     boundary_label: int | None
 
 
+# CS231N Lec 10: Keyframe extraction from shots
 def keyframe_path(frames_dir, movie_id, shot_idx, img):
     return frames_dir / movie_id / f"shot_{shot_idx:04d}_img_{img}.jpg"
 
@@ -83,7 +84,7 @@ def derive_label(left, right, label_source):
 # cuts with boundary_label == -1 are dropped (BaSSL's "ignore" marker).
 def cut_rows_for_movie(movie_id, split, shots, frames_dir, label_source="auto"):
     rows = []
-    for left, right in zip(shots, shots[1:]):
+    for left, right in zip(shots, shots[1:]):  # CS231N Lec 10: Adjacent shot boundary detection
         if left.boundary_label == -1:
             continue
         rows.append({
@@ -93,7 +94,7 @@ def cut_rows_for_movie(movie_id, split, shots, frames_dir, label_source="auto"):
             "scene_left_id": left.scene_id,
             "scene_right_id": right.scene_id,
             "y_inconsistent": derive_label(left, right, label_source),
-            "left_img0_path": str(keyframe_path(frames_dir, movie_id, left.shot_idx, 0)),
+            "left_img0_path": str(keyframe_path(frames_dir, movie_id, left.shot_idx, 0)),  # CS231N Lec 10: Temporal ordering of frames within a shot (img_0, img_1, img_2)
             "left_img1_path": str(keyframe_path(frames_dir, movie_id, left.shot_idx, 1)),
             "left_img2_path": str(keyframe_path(frames_dir, movie_id, left.shot_idx, 2)),
             "right_img0_path": str(keyframe_path(frames_dir, movie_id, right.shot_idx, 0)),

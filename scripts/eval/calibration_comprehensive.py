@@ -1,3 +1,10 @@
+# AI-USE: This file was likely generated with Claude (claude-sonnet-4-6) via Claude Code,
+# assessed from consistent docstring format, logging/argparse patterns, and path
+# conventions (HERE/REPO) shared uniformly across the codebase.
+# Prompt (inferred): "write Phase-3 P5: comprehensive calibration analysis of v1.5
+# including multi-threshold sweep, reliability diagram, Brier score/ECE, Platt
+# scaling, and tau95 robustness across splits."
+
 """Phase-3 P5: comprehensive calibration analysis of v1.5.
 
   1. multi-threshold sweep (tau50/75/90/95/99 from within-shot variation)

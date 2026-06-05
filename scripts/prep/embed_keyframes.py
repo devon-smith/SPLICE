@@ -50,8 +50,8 @@ class KeyframeDataset(Dataset):
         key, path = self.items[i]
         try:
             img = Image.open(path).convert("RGB")
-            pv = self.processor(images=img, return_tensors="pt")["pixel_values"][0]
-        except Exception:
+            pv = self.processor(images=img, return_tensors="pt")["pixel_values"][0]  # CS231N Lec 5: Image resizing and normalization preprocessing
+        except Exception:  # noqa: BLE001 - skip unreadable frames, embed the rest
             return key, None
         return key, pv
 

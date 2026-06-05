@@ -1,3 +1,8 @@
+# AI-USE: This file was generated with Claude (claude-sonnet-4-6) via Claude Code.
+# Prompt: "implement movie-level bootstrap CI for the AUPRC gap between v2 LoRA and
+# v1.5, and a paired permutation test for F1, auto-picking the best config from the
+# sweep directory by test AUPRC and writing a markdown report."
+
 """Significance tests for the v2 LoRA vs v1.5 comparison.
 
 Same protocol as the fusion comparison (fused_logistic.py):
@@ -47,8 +52,8 @@ def _best_config(sweep_dir: Path) -> tuple[Path, dict]:
     best_path, best_result, best_auprc = None, None, -1.0
     for rj in sorted(sweep_dir.glob("*/results.json")):
         r = json.loads(rj.read_text())
-        if r.get("test_auprc", -1) > best_auprc:
-            best_auprc = r["test_auprc"]
+        if r.get("val_auprc", -1) > best_auprc:
+            best_auprc = r["val_auprc"]
             best_path = rj.parent
             best_result = r
     if best_path is None:

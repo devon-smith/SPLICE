@@ -122,6 +122,9 @@ def metric_row(name, y, s, thr):
     ok = ~np.isnan(s)
     y, s = y[ok], s[ok]
     row = {"model": name, "n": int(len(y))}
+    # AI-USE: single-class guard below was added by Claude (claude-sonnet-4-6).
+    # Prompt: "patch metric_row to handle single-class subsets gracefully instead
+    # of crashing when per-source slices are all y=0 or all y=1."
     if len(np.unique(y)) < 2:
         row.update({"auroc": float("nan"), "auprc": float("nan"), "note": "single-class"})
     else:

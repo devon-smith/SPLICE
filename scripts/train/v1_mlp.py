@@ -1,3 +1,10 @@
+# AI-USE: This file was likely generated with Claude (claude-sonnet-4-6) via Claude Code,
+# assessed from consistent docstring format, logging/argparse patterns, and path
+# conventions (HERE/REPO) shared uniformly across the codebase.
+# Prompt (inferred): "write a v1 training script for a 2305-512-128-1 MLP head on
+# frozen DINOv2 pair features, with Adam + cosine schedule and early-stopping on
+# val AUPRC."
+
 """v1: a 2-layer MLP head on the frozen-DINOv2 2305-d pair feature.
 
 Same backbone and features as the v0 logistic model -- only the head changes
@@ -35,6 +42,7 @@ DEFAULT_FEATURES = "/mnt/disks/splice-data/pairs/dino_v0_boundary"
 DEFAULT_OUT = "/mnt/disks/splice-data/outputs/v1_mlp"
 
 
+# CS231N Lec 4: MLP forward pass (2305 -> 512 -> 128 -> 1)
 class MLPHead(nn.Module):
     """2305 -> 512 -> 128 -> 1 with ReLU and dropout."""
 
@@ -43,7 +51,7 @@ class MLPHead(nn.Module):
         layers: list[nn.Module] = []
         dim = in_dim
         for width in hidden:
-            layers += [nn.Linear(dim, width), nn.ReLU(), nn.Dropout(dropout)]
+            layers += [nn.Linear(dim, width), nn.ReLU(), nn.Dropout(dropout)]  # CS231N Lec 4: ReLU activations; Dropout
             dim = width
         layers.append(nn.Linear(dim, 1))
         self.net = nn.Sequential(*layers)
@@ -130,9 +138,9 @@ def main() -> None:
     pos_weight = torch.tensor(
         [float((y_tr == 0).sum()) / float(max((y_tr == 1).sum(), 1))], device=device
     )
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.epochs)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)  # CS231N Lec 3: Class-weighted BCE loss for 7.47% positive rate imbalance
+    optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)  # CS231N Lec 3: Adam optimizer usage
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.epochs)  # CS231N Lec 3: Learning rate schedules (cosine LR schedule)
     log.info("class-balancing pos_weight=%.2f", pos_weight.item())
 
     run = open_wandb(args.wandb_project, args.wandb_mode, vars(args))

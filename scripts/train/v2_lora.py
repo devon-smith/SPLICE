@@ -40,6 +40,7 @@ BATCH_SIZE = 32
 GRAD_ACCUM = 4
 MAX_CUTS_PER_EPOCH = 25000
 
+# CS231N Lec 5: Image resizing and normalization preprocessing
 # DINOv2 uses ImageNet stats
 tfm = transforms.Compose([
     transforms.Resize(256, interpolation=transforms.InterpolationMode.BICUBIC),
@@ -64,21 +65,22 @@ class CutDataset(Dataset):
         return pv_l, pv_r, torch.tensor(self.labels[i])
 
 
-# LayerNorm([eL | eR | |eL-eR| | cos]) -> scalar logit
+# CS231N Lec 4: MLP forward pass (2305 -> 512 -> 128 -> 1)
 class PairMLP(nn.Module):
     def __init__(self, emb_dim=768, hidden=(512, 128), dropout=0.1):
         super().__init__()
         in_dim = 2 * emb_dim + emb_dim + 1  # 2305
-        self.norm = nn.LayerNorm(in_dim)
-        layers = []
+        self.norm = nn.LayerNorm(in_dim)  # CS231N Lec 6: LayerNorm in PairMLP head
+        layers: list[nn.Module] = []
         dim = in_dim
         for w in hidden:
-            layers += [nn.Linear(dim, w), nn.ReLU(), nn.Dropout(dropout)]
+            layers += [nn.Linear(dim, w), nn.ReLU(), nn.Dropout(dropout)]  # CS231N Lec 4: ReLU activations; Dropout
             dim = w
         layers.append(nn.Linear(dim, 1))
         self.net = nn.Sequential(*layers)
 
-    def forward(self, e_l, e_r):
+    def forward(self, e_l: torch.Tensor, e_r: torch.Tensor) -> torch.Tensor:
+        # CS231N Lec 4: Backpropagation through the pair feature head
         abs_diff = (e_l - e_r).abs()
         cos = F.cosine_similarity(e_l, e_r, eps=1e-8).unsqueeze(-1)
         x = torch.cat([e_l, e_r, abs_diff, cos], dim=-1)
@@ -89,10 +91,10 @@ class PairMLP(nn.Module):
 def encode_pairs(backbone, pv_left, pv_right):
     b = pv_left.size(0)
     pv = torch.cat([pv_left, pv_right], dim=0)
-    out = backbone(pixel_values=pv)
+    out = backbone(pixel_values=pv)  # CS231N Lec 8: Vision Transformer (ViT-B/14) backbone — patch token embeddings
     pooled = getattr(out, "pooler_output", None)
     if pooled is None:
-        pooled = out.last_hidden_state[:, 0]
+        pooled = out.last_hidden_state[:, 0]  # CS231N Lec 8: CLS token as global image representation
     emb = pooled.float()
     return emb[:b], emb[b:]
 
@@ -129,11 +131,11 @@ def main():
           f"pos {100 * df['y_inconsistent'].mean():.2f}%")
 
     # build LoRA-wrapped backbone (only q,v adapters trainable; everything else frozen)
-    base = AutoModel.from_pretrained("facebook/dinov2-base")
-    lora_cfg = LoraConfig(r=LORA_R, lora_alpha=LORA_ALPHA,
-                          target_modules=["query", "value"],
+    base = AutoModel.from_pretrained("facebook/dinov2-base")  # CS231N Lec 6: Transfer learning: loading pretrained DINOv2 weights
+    lora_cfg = LoraConfig(r=LORA_R, lora_alpha=LORA_ALPHA,  # CS231N Lec 8: LoRA: low-rank adapter matrices on query and value projections
+                          target_modules=["query", "value"],  # CS231N Lec 8: Self-attention layers targeted by LoRA adapters
                           lora_dropout=LORA_DROPOUT, bias="none")
-    backbone = get_peft_model(base, lora_cfg).to(device)
+    backbone = get_peft_model(base, lora_cfg).to(device)  # CS231N Lec 6: Fine-tuning pretrained backbone
     backbone.print_trainable_parameters()
 
     head = PairMLP(emb_dim=768, hidden=(512, 128), dropout=0.1).to(device)
@@ -144,15 +146,15 @@ def main():
          max((splits["train"]["y_inconsistent"] == 1).sum(), 1)],
         dtype=torch.float32, device=device,
     )
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)  # CS231N Lec 3: Class-weighted BCE loss for 7.47% positive rate imbalance
     print(f"pos_weight={pos_weight.item():.2f}")
 
-    optim = torch.optim.AdamW([
+    optim = torch.optim.AdamW([  # CS231N Lec 3: Adam optimizer usage
         {"params": [p for p in backbone.parameters() if p.requires_grad], "lr": LR_BACKBONE},
         {"params": head.parameters(), "lr": LR_HEAD},
-    ], weight_decay=WEIGHT_DECAY)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=EPOCHS)
-    scaler = GradScaler(enabled=on_gpu)
+    ], weight_decay=WEIGHT_DECAY)  # CS231N Lec 3: Weight decay / L2 regularization on MLP head
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=EPOCHS)  # CS231N Lec 3: Learning rate schedules (cosine LR schedule in v2 LoRA training)
+    scaler = GradScaler(enabled=on_gpu)  # CS231N Lec 11: fp16 mixed precision training
 
     out_dir = Path(args.out) / f"r{LORA_R}_a{LORA_ALPHA}_seed{args.seed}"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -181,7 +183,7 @@ def main():
                 e_l, e_r = encode_pairs(backbone, pv_l, pv_r)
                 logit = head(e_l.float(), e_r.float())
                 loss = criterion(logit, y) / GRAD_ACCUM
-            scaler.scale(loss).backward()
+            scaler.scale(loss).backward()  # CS231N Lec 11: Gradient accumulation
             if (step + 1) % GRAD_ACCUM == 0:
                 scaler.step(optim)
                 scaler.update()
@@ -208,7 +210,7 @@ def main():
 
         if val_auprc > best_auprc:
             best_auprc, best_epoch, stale = val_auprc, epoch, 0
-            best_lora_state = {k: v.detach().cpu().clone()
+            best_lora_state = {k: v.detach().cpu().clone()  # CS231N Lec 11: Checkpoint saving and resume
                                for k, v in get_peft_model_state_dict(backbone).items()}
             best_head_state = {k: v.detach().cpu().clone() for k, v in head.state_dict().items()}
         else:

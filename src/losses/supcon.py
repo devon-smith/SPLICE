@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 
+# CS231N Lec 12: Supervised contrastive loss (SupConLoss)
 class SupConLoss(nn.Module):
     def __init__(self, temperature=0.07):
         super().__init__()
@@ -19,7 +20,7 @@ class SupConLoss(nn.Module):
 
         sim = torch.matmul(features, features.T) / self.temperature  # (N, N)
         eye = torch.eye(N, dtype=torch.bool, device=device)
-        pos_mask = (labels.unsqueeze(1) == labels.unsqueeze(0)) & ~eye
+        pos_mask = (labels.unsqueeze(1) == labels.unsqueeze(0)) & ~eye  # CS231N Lec 12: Contrastive positive/negative pair construction from scene labels
 
         has_pos = pos_mask.any(dim=1)
         if not has_pos.any():

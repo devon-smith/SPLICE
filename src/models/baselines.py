@@ -62,6 +62,7 @@ class _PathImageDataset(Dataset):
         return self.paths[i], pv
 
 
+# CS231N Lec 16: CLIP ViT-L image encoder used as zero-shot baseline
 class CLIPImageEncoder:
     def __init__(self, model_id="openai/clip-vit-large-patch14", device=None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -89,6 +90,7 @@ class CLIPImageEncoder:
         return out
 
 
+# CS231N Lec 16: Cosine similarity between CLIP embeddings as consistency score
 # per-pair 1 - cos (higher = more inconsistent); NaN if either embedding is missing
 def cosine_distance_scores(emb, left_paths, right_paths):
     scores = np.full(len(left_paths), np.nan, dtype=np.float64)
