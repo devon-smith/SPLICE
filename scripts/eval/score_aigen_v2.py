@@ -22,9 +22,7 @@ REPO = Path(__file__).resolve().parents[2]
 KEYFRAMES_DIR = "/mnt/disks/splice-data/outputs/aigen_eval/keyframes"
 PRIOR_CSV = "/mnt/disks/splice-data/outputs/aigen_eval/results/per_pair_scores.csv"
 SEED_DIRS = [
-    "/mnt/disks/splice-data/outputs/v2_lora_extended/seed0/r8_a16",
-    "/mnt/disks/splice-data/outputs/v2_lora_extended/seed1/r8_a16",
-    "/mnt/disks/splice-data/outputs/v2_lora_extended/seed2/r8_a16",
+    "/mnt/disks/splice-data/outputs/v2_lora_sweep/r8_a32_lrbb5e-05",
 ]
 
 BUCKET_OF = {"A003": "clean", "A013": "clean",
@@ -96,7 +94,8 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     keyframes_dir = Path(args.keyframes_dir)
     pair_ids = sorted(d.name for d in keyframes_dir.iterdir() if d.is_dir())
-    print(f"scoring {len(pair_ids)} Veo pairs across {len(SEED_DIRS)} v2 seeds on {device}")
+    n_seeds = len(SEED_DIRS)
+    print(f"scoring {len(pair_ids)} Veo pairs across {n_seeds} v2 seed(s) on {device}")
 
     seed_scores = {}
     for s, sd in enumerate(SEED_DIRS):
@@ -115,23 +114,25 @@ def main():
 
     rows = []
     for pid in pair_ids:
-        ss = [seed_scores[s][pid] for s in range(3)]
-        rows.append({
+        ss = [seed_scores[s][pid] for s in range(n_seeds)]
+        row = {
             "pair_id": pid, "bucket": BUCKET_OF[pid], "bucket_rank": BUCKET_RANK[BUCKET_OF[pid]],
-            "v2_seed0": ss[0], "v2_seed1": ss[1], "v2_seed2": ss[2],
-            "v2_3seed_mean": float(np.mean(ss)),
-            "v2_3seed_std": float(np.std(ss, ddof=1)),
+            "v2_ensemble_mean": float(np.mean(ss)),
+            "v2_ensemble_std": float(np.std(ss, ddof=1)) if n_seeds > 1 else 0.0,
             "v0_logistic": float(prior.loc[pid, "v0_logistic"]),
             "v1_5_MLP": float(prior.loc[pid, "v1.5_MLP"]),
             "clip_cos": float(prior.loc[pid, "clip_cos"]),
-        })
-    df = pd.DataFrame(rows).sort_values("v2_3seed_mean", ascending=False).reset_index(drop=True)
+        }
+        for s_idx, s_score in enumerate(ss):
+            row[f"v2_seed{s_idx}"] = s_score
+        rows.append(row)
+    df = pd.DataFrame(rows).sort_values("v2_ensemble_mean", ascending=False).reset_index(drop=True)
     df.to_csv(args.out_csv, index=False)
     print(f"wrote {args.out_csv}")
 
     ranks = df["bucket_rank"].to_numpy()
     metrics = {}
-    for model in ("v0_logistic", "v1_5_MLP", "v2_3seed_mean", "clip_cos"):
+    for model in ("v0_logistic", "v1_5_MLP", "v2_ensemble_mean", "clip_cos"):
         rho, p = spearmanr(df[model].to_numpy(), ranks)
         metrics[model] = {"spearman": float(rho), "p_value": float(p)}
 
@@ -142,7 +143,7 @@ def main():
             "n": int(len(g)),
             "v0_mean": float(g["v0_logistic"].mean()),
             "v1_5_mean": float(g["v1_5_MLP"].mean()),
-            "v2_mean": float(g["v2_3seed_mean"].mean()),
+            "v2_mean": float(g["v2_ensemble_mean"].mean()),
         }
 
     summary = {
@@ -153,16 +154,18 @@ def main():
         "agree_top": set(df.head(2)["pair_id"]) == {"A005", "A015"},
         "agree_bottom": set(df.tail(2)["pair_id"]) == {"A003", "A013"},
         "n_pairs": int(len(df)),
+        "n_seeds": n_seeds,
+        "seed_dirs": [str(p) for p in SEED_DIRS],
     }
     Path(args.out_json).write_text(json.dumps(summary, indent=2))
     print(f"wrote {args.out_json}")
 
-    print("\nper-pair (sorted by v2 3-seed mean)")
-    print(df[["pair_id", "bucket", "v2_3seed_mean", "v2_3seed_std",
+    print(f"\nper-pair (sorted by v2 ensemble mean, {n_seeds} seed(s))")
+    print(df[["pair_id", "bucket", "v2_ensemble_mean", "v2_ensemble_std",
               "v1_5_MLP", "v0_logistic", "clip_cos"]].round(4).to_string(index=False))
     print("\nSpearman rho vs bucket order (clean<drift<major)")
     for m, r in metrics.items():
-        print(f"  {m:18s}  rho={r['spearman']:+.4f}  p={r['p_value']:.4f}")
+        print(f"  {m:20s}  rho={r['spearman']:+.4f}  p={r['p_value']:.4f}")
     print(f"\ntop-2 by v2: {summary['v2_top2']}  (matches {{A005,A015}}: {summary['agree_top']})")
     print(f"bottom-2:   {summary['v2_bottom2']}  (matches {{A003,A013}}: {summary['agree_bottom']})")
     print("\nbucket means")
