@@ -169,14 +169,14 @@ def main():
     summary = {
         "best_dropout": float(best_dropout),
         "best_weight_decay": float(best_wd),
-        "val_auprc_mean": float(val_auprcs.mean()),
-        "val_auprc_std": float(val_auprcs.std()),
-        "test_auprc_mean": float(test_auprcs.mean()),
-        "test_auprc_std": float(test_auprcs.std()),
+        "val_auprc_mean": val_auprcs.mean(),
+        "val_auprc_std": val_auprcs.std(),
+        "test_auprc_mean": test_auprcs.mean(),
+        "test_auprc_std": test_auprcs.std(),
         "test_auprc_per_seed": test_auprcs.tolist(),
         "ensemble_test_auprc": float(ens_test_auprc),
     }
-    (out_dir / "results.json").write_text(json.dumps(summary, indent=2))
+    (out_dir / "results.json").write_text(json.dumps(summary, indent=2, default=float))
 
     print(f"\nv1.5 selected: dropout={best_dropout} weight_decay={best_wd:.0e}")
     print(f"val  AUPRC {val_auprcs.mean():.4f} +/- {val_auprcs.std():.4f}")

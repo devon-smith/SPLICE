@@ -73,7 +73,7 @@ def bootstrap_auprc_diff(y, sa, sb, movie_ids, n_boot=1000, seed=0):
         diffs[b] = (average_precision_score(y[idx], sa[idx])
                     - average_precision_score(y[idx], sb[idx]))
     return {"diff": float(obs),
-            "ci": (float(np.percentile(diffs, 2.5)), float(np.percentile(diffs, 97.5)))}
+            "ci": (np.percentile(diffs, 2.5), np.percentile(diffs, 97.5))}
 
 
 def main():
@@ -138,7 +138,7 @@ def main():
     movie_ids = test_meta.loc[keep, "movie_id"].to_numpy()
 
     boot = bootstrap_auprc_diff(y_aligned, fused_s, v15_s, movie_ids, n_boot=args.n_boot)
-    boot["n"] = int(len(y_aligned))
+    boot["n"] = len(y_aligned)
     print(f"bootstrap AUPRC(fused) - AUPRC(v1.5) = {boot['diff']:+.4f}  "
           f"CI [{boot['ci'][0]:+.4f}, {boot['ci'][1]:+.4f}]")
 

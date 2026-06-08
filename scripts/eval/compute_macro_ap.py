@@ -20,8 +20,8 @@ def macro_ap(scores, labels, movie_ids, min_cuts=5):
         per_movie[str(mid)] = float(average_precision_score(y, scores[m]))
     aps = np.array(list(per_movie.values()))
     return {
-        "macro_ap": float(aps.mean()),
-        "median_ap": float(np.median(aps)),
+        "macro_ap": aps.mean(),
+        "median_ap": np.median(aps),
         "std_ap": float(aps.std(ddof=1)),
         "n_movies_used": len(aps),
         "per_movie_ap": per_movie,
@@ -51,8 +51,8 @@ def bootstrap_gap(scores_a, scores_b, labels, movie_ids, n_resamples=1000, seed=
         "ci_low": float(lo),
         "ci_high": float(hi),
         "excludes_zero": bool(lo > 0 or hi < 0),
-        "macro_ap_a": float(ap_a.mean()),
-        "macro_ap_b": float(ap_b.mean()),
+        "macro_ap_a": ap_a.mean(),
+        "macro_ap_b": ap_b.mean(),
         "n_resamples": n_resamples,
         "n_movies": n,
     }
@@ -109,4 +109,4 @@ if __name__ == "__main__":
               f"CI=[{result['ci_low']:+.4f}, {result['ci_high']:+.4f}]  "
               f"excludes_zero={result['excludes_zero']}  -> {args.out}")
 
-    Path(args.out).write_text(json.dumps(result, indent=2))
+    Path(args.out).write_text(json.dumps(result, indent=2, default=float))

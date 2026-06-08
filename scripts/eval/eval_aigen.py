@@ -121,7 +121,7 @@ def score_image_baselines(cuts):
 def metric_row(name, y, s, thr):
     ok = ~np.isnan(s)
     y, s = y[ok], s[ok]
-    row = {"model": name, "n": int(len(y))}
+    row = {"model": name, "n": len(y)}
     # AI-USE: single-class guard below was added by Claude (claude-sonnet-4-6).
     # Prompt: "patch metric_row to handle single-class subsets gracefully instead
     # of crashing when per-source slices are all y=0 or all y=1."
@@ -200,8 +200,8 @@ def main():
         per_source[src] = [metric_row(m, y[idx], scores[m][idx], thr) for m in order]
 
     results = {
-        "n_pairs": int(len(cuts)),
-        "positive_rate": float(y.mean()),
+        "n_pairs": len(cuts),
+        "positive_rate": y.mean(),
         "overall": overall,
         "per_source": per_source,
     }

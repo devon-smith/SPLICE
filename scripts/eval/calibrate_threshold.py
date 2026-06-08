@@ -98,18 +98,18 @@ def main():
         calibration[name] = {
             f"tau_{q_pct}": tau,
             "distribution_stats": {
-                "mean": float(np.mean(w)),
-                "std": float(np.std(w)),
-                "p50": float(np.percentile(w, 50)),
-                "p75": float(np.percentile(w, 75)),
-                "p90": float(np.percentile(w, 90)),
-                "p95": float(np.percentile(w, 95)),
-                "p99": float(np.percentile(w, 99)),
+                "mean": np.mean(w),
+                "std": np.std(w),
+                "p50": np.percentile(w, 50),
+                "p75": np.percentile(w, 75),
+                "p90": np.percentile(w, 90),
+                "p95": np.percentile(w, 95),
+                "p99": np.percentile(w, 99),
             },
         }
         print(f"{name}: tau_{q_pct} = {tau:.4f}")
 
-    (out_dir / "calibration.json").write_text(json.dumps(calibration, indent=2))
+    (out_dir / "calibration.json").write_text(json.dumps(calibration, indent=2, default=float))
 
     # within-shot vs cut-level distribution figure
     fig, axes = plt.subplots(1, len(within), figsize=(6 * len(within), 4))
@@ -141,7 +141,7 @@ def main():
                 row[f"recall_at_{key}"] = m["recall"]
             else:
                 row[f"f1_at_{key}"] = None
-        (v0_dir / "results_calibrated.json").write_text(json.dumps(rows, indent=2))
+        (v0_dir / "results_calibrated.json").write_text(json.dumps(rows, indent=2, default=float))
         table = pd.DataFrame(rows)
         cols = ["model", "auroc", "auprc", "f1_at_val_thr", f"f1_at_tau_{q_pct}"]
         table = table[[c for c in cols if c in table.columns]]
