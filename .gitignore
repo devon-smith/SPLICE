@@ -19,6 +19,7 @@ outputs/
 .idea/
 logs/
 reports/figures/error_grid/
+wandb/
 
 # Claude Code project config -- kept local, not part of the repo
 CLAUDE.md
