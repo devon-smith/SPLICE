@@ -1,8 +1,5 @@
-# AI-generated-video evaluation harness
-# takes an aigen cut index, runs the same v0/v1 scoring pipeline (DINOv2 + 2305-d
-# pair feature + 6 scorers), reports metrics overall and per source.
-# --in_dist_check sanity-checks the harness on MovieNet test (should reproduce v0/v1.5 AUPRCs).
-# usage: python scripts/eval/eval_aigen.py --aigen_index PATH --out DIR
+# AI-generated-video eval harness
+# takes an aigen cut index, runs the same v0/v1 scoring pipeline 
 
 import sys
 from pathlib import Path

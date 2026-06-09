@@ -1,5 +1,4 @@
-# AI-USE: this script was AI-assisted using Claude Code and used only to collate results/findings.
-# Code was reviewed by the team and experiment choices, runs, and interpretation were done by the team.
+# AI-USE: This script was AI-assisted with Claude via Claude Code.
 # build the labeled cut index: one row per adjacent shot-pair cut in MovieNet
 
 import sys

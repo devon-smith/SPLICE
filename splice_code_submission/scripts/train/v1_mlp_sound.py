@@ -1,5 +1,4 @@
-# AI-USE: this script was AI-assisted using Claude Code and used only to collate results/findings.
-# Code was reviewed by the team and experiment choices, runs, and interpretation were done by the team.
+# AI-USE: This script was AI-assisted with Claude via Claude Code.
 # v1.5: MLP head on the 2305-d DINOv2 pair feature with a dropout x weight_decay sweep
 # selects best (dropout, wd) by mean val AUPRC across 3 seeds, then evals test once
 # usage: python scripts/train/v1_mlp_sound.py

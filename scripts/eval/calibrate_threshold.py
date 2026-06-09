@@ -1,8 +1,7 @@
 # calibrate an inference threshold from within-shot visual variation
 # the 3 keyframes of a single shot are the same continuous scene by definition,
-# so scoring within-shot pairs gives a "consistent variation" distribution.
-# tau_95 = 95th percentile -> a cut above tau_95 is more discontinuous than 95% of within-shot motion
-# usage: python scripts/eval/calibrate_threshold.py
+# so scoring within-shot pairs gives a consistent variation distribution.
+# tau_95 = 95th percentile
 
 import sys
 from pathlib import Path

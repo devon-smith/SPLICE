@@ -1,8 +1,5 @@
 # one-off per-pair scoring table for the fixed 10-pair Veo/Dispatch pilot
-# the aggregate harness (eval_aigen.py) reports metrics, not per-pair scores;
-# with an all-y=0 set AUROC/AUPRC are undefined anyway. This script intentionally
-# hard-codes the pilot ids and human Dispatch buckets.
-# usage: python scripts/eval/score_aigen_per_pair.py
+
 
 import argparse
 import sys

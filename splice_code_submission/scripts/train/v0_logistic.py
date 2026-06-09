@@ -1,5 +1,4 @@
-# AI-USE: this script was AI-assisted using Claude Code and used only to collate results/findings.
-# Code was reviewed by the team and experiment choices, runs, and interpretation were done by the team.
+# AI-USE: This script was AI-assisted with Claude via Claude Code.
 # v0: logistic regression on the 2305-d DINOv2 pair feature + three non-learned baselines
 # (raw DINOv2 cosine, HSV chi-square, CLIP cosine). all four thresholded at F1-optimal on val.
 # usage: python scripts/train/v0_logistic.py

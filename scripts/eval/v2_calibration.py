@@ -1,7 +1,5 @@
 # reliability diagrams + ECE + Brier for v0, v1.5, v2
-# all three are trained with class-weighted BCE (pos_weight ~= 12) so the raw
-# sigmoid outputs are not calibrated probabilities; this quantifies the gap.
-# usage: python scripts/eval/v2_calibration.py
+
 
 import argparse
 import json

@@ -1,7 +1,5 @@
-# AI-gen calibration: domain-specific score percentiles for all 6 scorers
-# MovieNet thresholds don't transfer to AI-gen, so we compute a Veo-baseline
-# percentile table that downstream flagging uses.
-# usage: python scripts/eval/aigen_calibration.py
+# AI-gen calibration... domain-specific score percentiles for all 6 scorers
+
 
 import argparse
 import json

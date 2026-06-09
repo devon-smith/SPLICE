@@ -1,6 +1,4 @@
-# per-movie test diagnostic: where does v2 help over v1.5, where does it not?
-# v1.5 = per-seed-mean macro AP (matches the headline 0.418); v2 = seed-0 proxy
-# usage: python scripts/eval/per_movie_analysis.py
+# per-movie test diagnostics
 
 import argparse
 from pathlib import Path

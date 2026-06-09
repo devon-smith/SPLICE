@@ -1,5 +1,4 @@
-# AI-USE: this script was AI-assisted using Claude Code and used only to collate results/findings.
-# Code was reviewed by the team and experiment choices, runs, and interpretation were done by the team.
+# AI-USE: This script was AI-assisted with Claude via Claude Code.
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))

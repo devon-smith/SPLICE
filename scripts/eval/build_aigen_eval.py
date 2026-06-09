@@ -1,7 +1,5 @@
 # build an AI-generated-video cut index from raw clip pairs
-# extracts 3 uniform keyframes per clip (matches MovieNet's shot-3-keyframe schema)
-# and writes a cut-index parquet so embedding / scoring scripts run on it unchanged.
-# usage: python scripts/eval/build_aigen_eval.py --clips_root DIR --out DIR
+
 
 import sys
 from pathlib import Path

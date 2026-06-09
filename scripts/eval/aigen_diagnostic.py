@@ -1,6 +1,4 @@
-# diagnostic for v2's Spearman drop on the Veo pilot.
-# tests 4 hypotheses: pipeline bug, label-score mismatch, frame selection, real finding.
-# usage: python scripts/eval/aigen_diagnostic.py
+
 
 import argparse
 import json

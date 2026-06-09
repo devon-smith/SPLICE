@@ -1,7 +1,4 @@
-# score the 10-pair Veo/Dispatch pilot through v2 LoRA
-# v2's backbone is LoRA-tuned -- can't reuse the frozen-DINOv2 embedding cache.
-# hard-codes the pilot keyframe location, checkpoint dir, and Dispatch buckets.
-# usage: python scripts/eval/score_aigen_v2.py
+# score the 10-pair Veo/Dispatch pilot through v2 LoRa
 
 import argparse
 import json

@@ -1,8 +1,5 @@
-# one-off rank-based flagging analysis for the fixed 10-pair Veo/Dispatch pilot
-# each Veo pair is ranked by percentile against MovieNet within-scene (y=0) scores.
-# a pair is "flagged" if any of {v1.5, v0, CLIP} percentile > 95.
-# This intentionally hard-codes the pilot ids and human Dispatch buckets.
-# usage: python scripts/eval/rank_based_flagging.py
+#rank-based flagging analysis for the fixed 10-pair Veo/Dispatch pilot
+
 
 import argparse
 from pathlib import Path
